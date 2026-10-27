@@ -25,7 +25,7 @@ export const primaryNext: Record<string, string> = {
   "/mechanic/job-details": "/mechanic/navigation",
   "/mechanic/navigation": "/mechanic/inspection",
   "/mechanic/inspection": "/mechanic/create-quote",
-  "/mechanic/create-quote": "/mechanic/work-progress",
+  "/mechanic/create-quote": "/mechanic/awaiting-approval",
   "/mechanic/work-progress": "/mechanic/complete-job",
   "/mechanic/complete-job": "/mechanic/earnings",
 
@@ -98,6 +98,13 @@ export function getBottomTarget(pathname: string, item: "Home" | "Jobs" | "Messa
 
   if (item === "Messages") return "/messages";
   if (item === "Profile") return role === "motorist" ? "/profile" : `/${role}/profile`;
-  if (item === "Jobs") return role === "motorist" ? "/motorist/history" : `/${role}/history`;
+
+  if (item === "Jobs") {
+    if (role === "motorist") return "/motorist/history";
+    if (role === "partsdealer") return "/partsdealer/orders";
+    if (role === "towing") return "/towing/tow-offer";
+    return `/${role}/history`;
+  }
+
   return role === "motorist" ? "/motorist/home" : `/${role}/dashboard`;
 }
