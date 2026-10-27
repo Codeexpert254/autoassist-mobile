@@ -53,6 +53,10 @@ export default function Login() {
         <Text style={styles.termsOfService}>
           By continuing, you agree to the Terms of Service and Privacy Policy.
         </Text>
+
+        <Pressable style={styles.devPreviewButton} onPress={() => router.push("/preview")}>
+          <Text style={styles.devPreviewText}>Developer Preview</Text>
+        </Pressable>
       </SafeAreaView>
     </View>
   );
@@ -76,4 +80,20 @@ const styles = StyleSheet.create({
   createAccountButton: { alignItems: "center", marginBottom: 42 },
   createAccount: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   termsOfService: { width: 310, alignSelf: "center", textAlign: "center", fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#667085" },
+  devPreviewButton: {
+    alignSelf: "center",
+    marginTop: "auto",
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#B8D2F0",
+    backgroundColor: "#EAF2FD",
+  },
+  devPreviewText: {
+    color: "#1857A6",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+  },
 });
