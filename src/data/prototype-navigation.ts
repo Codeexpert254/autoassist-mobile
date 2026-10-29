@@ -28,7 +28,6 @@ export const primaryNext: Record<string, string> = {
   "/mechanic/awaiting-approval": "/mechanic/work-progress",
   "/mechanic/work-progress": "/mechanic/complete-job",
   "/mechanic/request-parts": "/mechanic/part-delivery",
-  "/mechanic/part-delivery": "/mechanic/complete-job",
   "/mechanic/complete-job": "/mechanic/earnings",
 
   "/partsdealer/registration": "/partsdealer/verification",

@@ -30,6 +30,22 @@ const contextualNext: Record<string, { label: string; route: string }> = {
     label: "View brake pad set",
     route: "/motorist/part-details",
   },
+  "/motorist/finding-mechanic": {
+    label: "Simulate mechanic acceptance",
+    route: "/motorist/mechanic-assigned",
+  },
+  "/motorist/mechanic-assigned": {
+    label: "Simulate arrival & inspection",
+    route: "/motorist/inspection-quote",
+  },
+  "/motorist/repair-progress": {
+    label: "Simulate repair completion",
+    route: "/motorist/service-payment",
+  },
+  "/mechanic/awaiting-approval": {
+    label: "Simulate customer approval",
+    route: "/mechanic/work-progress",
+  },
   "/partsdealer/inventory": {
     label: "Add new part",
     route: "/partsdealer/add-part",
@@ -46,8 +62,8 @@ export function StaticScreen(props: StaticScreenProps) {
   const secondary = secondaryNext[pathname];
   const context = contextualNext[pathname];
   const actionLabel =
-    props.primaryAction ?? context?.label ?? (next ? "Continue demo" : undefined);
-  const actionRoute = next ?? context?.route;
+    context?.label ?? props.primaryAction ?? (next ? "Continue demo" : undefined);
+  const actionRoute = context?.route ?? next;
   const liveStatus = getStatusForPath(pathname);
 
   const extraBottomSpace =
