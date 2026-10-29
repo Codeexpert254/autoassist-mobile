@@ -3,8 +3,18 @@ import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useDemoApp } from "@/context/demo-app-context";
+
 export default function Home() {
   const router = useRouter();
+  const { state } = useDemoApp();
+  const firstName = state.user.name.split(" ")[0] || "Motorist";
+  const vehicleName = `${state.vehicle.make} ${state.vehicle.model}`.trim();
+
+  const activityStatus =
+    state.mechanicRequestStatus === "idle"
+      ? "Demo ready • choose a service below"
+      : state.mechanicRequestStatus;
 
   return (
     <View style={styles.homeContainer}>
@@ -15,15 +25,15 @@ export default function Home() {
             <Text style={styles.previewLink}>Preview</Text>
           </Pressable>
         </View>
-        <Text style={styles.title}>Abraham</Text>
+        <Text style={styles.title}>{firstName}</Text>
 
         <Pressable style={styles.vehicleContainer} onPress={() => router.push("/motorist/vehicle-details")}>
           <Text style={styles.vehicle}>MY VEHICLE</Text>
           <View style={styles.vehicleInfo}>
-            <Text style={styles.vehicleModel}>Toyota Fielder</Text>
+            <Text style={styles.vehicleModel}>{vehicleName}</Text>
             <Image source={require("../../../assets/images/left-arrow.png")} style={styles.vehicleArrow} />
           </View>
-          <Text style={styles.vehicleReg}>2015 • KDA XXX X</Text>
+          <Text style={styles.vehicleReg}>{state.vehicle.year} • {state.vehicle.registration}</Text>
         </Pressable>
 
         <Text style={styles.helpTitle}>What do you need help with?</Text>
@@ -39,11 +49,11 @@ export default function Home() {
           <ServiceCard label="TOWING" icon={require("../../../assets/images/towingicon.png")} onPress={() => router.push("/motorist/request-towing")} />
         </View>
 
-        <Text style={styles.recentActivity}>Recent activity</Text>
+        <Text style={styles.recentActivity}>Live demo activity</Text>
         <Pressable style={styles.activityContainer} onPress={() => router.push("/motorist/history")}>
-          <Text style={styles.activity}>Brake inspection</Text>
-          <Text style={styles.activityStatus}>Completed • Nairobi Auto Care</Text>
-          <Text style={styles.activityDetails}>View job details</Text>
+          <Text style={styles.activity}>Repair request</Text>
+          <Text style={styles.activityStatus}>{activityStatus}</Text>
+          <Text style={styles.activityDetails}>View jobs & history</Text>
         </Pressable>
 
         <View style={styles.bottomNav}>
@@ -101,7 +111,7 @@ const styles = StyleSheet.create({
   recentActivity: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 38, marginBottom: 16 },
   activityContainer: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderWidth: 1, minHeight: 105, borderRadius: 14, paddingHorizontal: 16, gap: 6, justifyContent: "center" },
   activity: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular" },
+  activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", textTransform: "capitalize" },
   activityDetails: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   bottomNav: { marginTop: "auto", height: 64, borderTopWidth: 1, borderTopColor: "#E4E7EC", flexDirection: "row", marginHorizontal: -24 },
   navItem: { flex: 1, alignItems: "center", justifyContent: "center" },

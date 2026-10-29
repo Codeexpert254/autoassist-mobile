@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { type DemoRole, useDemoApp } from "@/context/demo-app-context";
+
 const roles = [
   {
     key: "motorist",
@@ -17,35 +19,41 @@ const roles = [
     title: "MECHANIC",
     subtitle: "Receive and manage repair jobs",
     icon: require("../../assets/images/mechanic.png"),
-    route: "/mechanic/dashboard",
+    route: "/mechanic/registration",
   },
   {
     key: "partsdealer",
     title: "PARTS DEALER",
     subtitle: "List stock and fulfil part requests",
     icon: require("../../assets/images/partsdealer.png"),
-    route: "/partsdealer/dashboard",
+    route: "/partsdealer/registration",
   },
   {
     key: "towing",
     title: "TOWING AGENT",
     subtitle: "Receive nearby towing requests",
     icon: require("../../assets/images/towingagent.png"),
-    route: "/towing/dashboard",
+    route: "/towing/registration",
   },
   {
     key: "rider",
     title: "RIDER",
     subtitle: "Accept delivery jobs and deliver spare parts",
     icon: require("../../assets/images/rider.png"),
-    route: "/rider/dashboard",
+    route: "/rider/registration",
   },
 ] as const;
 
 export default function RoleSelection() {
   const router = useRouter();
+  const { selectRole } = useDemoApp();
   const [selected, setSelected] = useState(0);
   const current = roles[selected];
+
+  const handleContinue = () => {
+    selectRole(current.key as DemoRole);
+    router.replace(current.route as never);
+  };
 
   return (
     <View style={styles.screen}>
@@ -81,7 +89,7 @@ export default function RoleSelection() {
           })}
         </View>
 
-        <Pressable style={styles.continueButton} onPress={() => router.replace(current.route as never)}>
+        <Pressable style={styles.continueButton} onPress={handleContinue}>
           <Text style={styles.continueText}>Continue as {current.title.toLowerCase()}</Text>
         </Pressable>
       </SafeAreaView>

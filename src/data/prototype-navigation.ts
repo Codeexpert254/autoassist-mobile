@@ -18,15 +18,17 @@ export const primaryNext: Record<string, string> = {
   "/motorist/vehicle-details": "/motorist/addavehicle",
 
   "/mechanic/registration": "/mechanic/verification",
-  "/mechanic/verification": "/mechanic/awaiting-approval",
-  "/mechanic/awaiting-approval": "/mechanic/dashboard",
+  "/mechanic/verification": "/mechanic/dashboard",
   "/mechanic/dashboard": "/mechanic/job-offer",
   "/mechanic/job-offer": "/mechanic/job-details",
   "/mechanic/job-details": "/mechanic/navigation",
   "/mechanic/navigation": "/mechanic/inspection",
   "/mechanic/inspection": "/mechanic/create-quote",
   "/mechanic/create-quote": "/mechanic/awaiting-approval",
+  "/mechanic/awaiting-approval": "/mechanic/work-progress",
   "/mechanic/work-progress": "/mechanic/complete-job",
+  "/mechanic/request-parts": "/mechanic/part-delivery",
+  "/mechanic/part-delivery": "/mechanic/complete-job",
   "/mechanic/complete-job": "/mechanic/earnings",
 
   "/partsdealer/registration": "/partsdealer/verification",
@@ -85,7 +87,10 @@ export function getCardTarget(pathname: string, blockType: string, itemIndex: nu
   return undefined;
 }
 
-export function getBottomTarget(pathname: string, item: "Home" | "Jobs" | "Messages" | "Profile") {
+export function getBottomTarget(
+  pathname: string,
+  item: "Home" | "Jobs" | "Messages" | "Profile",
+) {
   const role = pathname.startsWith("/mechanic")
     ? "mechanic"
     : pathname.startsWith("/partsdealer")
@@ -101,9 +106,10 @@ export function getBottomTarget(pathname: string, item: "Home" | "Jobs" | "Messa
 
   if (item === "Jobs") {
     if (role === "motorist") return "/motorist/history";
+    if (role === "mechanic") return "/mechanic/history";
     if (role === "partsdealer") return "/partsdealer/orders";
-    if (role === "towing") return "/towing/tow-offer";
-    return `/${role}/history`;
+    if (role === "rider") return "/rider/history";
+    return "/towing/earnings";
   }
 
   return role === "motorist" ? "/motorist/home" : `/${role}/dashboard`;

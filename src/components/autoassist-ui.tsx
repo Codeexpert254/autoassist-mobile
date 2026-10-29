@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  AdminScreen,
+  AdminScreen as BaseAdminScreen,
   BottomNav as BaseBottomNav,
   ScreenHeader,
   StaticScreen as BaseStaticScreen,
@@ -16,8 +16,9 @@ import {
   primaryNext,
   secondaryNext,
 } from "@/data/prototype-navigation";
+import { useDemoApp } from "@/context/demo-app-context";
 
-export { AdminScreen, ScreenHeader, BaseBottomNav as BottomNav };
+export { ScreenHeader, BaseBottomNav as BottomNav };
 export type { ScreenBlock, StaticScreenProps, Tone };
 
 const contextualNext: Record<string, { label: string; route: string }> = {
@@ -39,18 +40,40 @@ export function StaticScreen(props: StaticScreenProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { performAction, getStatusForPath } = useDemoApp();
 
   const next = primaryNext[pathname];
   const secondary = secondaryNext[pathname];
   const context = contextualNext[pathname];
-  const actionLabel = props.primaryAction ?? context?.label;
+  const actionLabel =
+    props.primaryAction ?? context?.label ?? (next ? "Continue demo" : undefined);
   const actionRoute = next ?? context?.route;
+  const liveStatus = getStatusForPath(pathname);
 
-  const extraBottomSpace = actionLabel || props.secondaryAction || props.bottomNav ? 115 : 24;
+  const extraBottomSpace =
+    actionLabel || props.secondaryAction || props.bottomNav ? 115 : 24;
+
   const blocks: ScreenBlock[] = [
     ...(props.blocks ?? []),
+    ...(liveStatus
+      ? [
+          {
+            type: "callout" as const,
+            title: "LIVE DEMO STATE",
+            text: liveStatus,
+            tone: "blue" as const,
+          },
+        ]
+      : []),
     { type: "spacer", size: extraBottomSpace },
   ];
+
+  const runAction = (label: string, route?: string) => {
+    performAction(pathname, label);
+    if (route) {
+      router.push(route as never);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -78,19 +101,19 @@ export function StaticScreen(props: StaticScreenProps) {
             { bottom: props.bottomNav ? insets.bottom + 70 : insets.bottom + 16 },
           ]}
         >
-          {actionLabel && actionRoute ? (
+          {actionLabel ? (
             <Pressable
               style={styles.primaryButton}
-              onPress={() => router.push(actionRoute as never)}
+              onPress={() => runAction(actionLabel, actionRoute)}
             >
               <Text style={styles.primaryText}>{actionLabel}</Text>
             </Pressable>
           ) : null}
 
-          {props.secondaryAction && secondary ? (
+          {props.secondaryAction ? (
             <Pressable
               style={styles.secondaryButton}
-              onPress={() => router.push(secondary as never)}
+              onPress={() => runAction(props.secondaryAction!, secondary)}
             >
               <Text style={styles.secondaryText}>{props.secondaryAction}</Text>
             </Pressable>
@@ -99,12 +122,19 @@ export function StaticScreen(props: StaticScreenProps) {
       ) : null}
 
       {props.bottomNav ? (
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+        <View
+          style={[
+            styles.bottomNav,
+            { paddingBottom: Math.max(insets.bottom, 4) },
+          ]}
+        >
           {(["Home", "Jobs", "Messages", "Profile"] as const).map((item) => (
             <Pressable
               key={item}
               style={styles.navItem}
-              onPress={() => router.replace(getBottomTarget(pathname, item) as never)}
+              onPress={() =>
+                router.replace(getBottomTarget(pathname, item) as never)
+              }
             >
               <Text
                 style={[
@@ -118,6 +148,45 @@ export function StaticScreen(props: StaticScreenProps) {
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+type AdminProps = {
+  title: string;
+  subtitle: string;
+  metrics?: Array<{ title: string; value: string; meta?: string }>;
+  items?: Array<{ title: string; subtitle: string }>;
+  active?: string;
+};
+
+const adminNav = [
+  ["Overview", "/admin/overview"],
+  ["Verification", "/admin/verification-queue"],
+  ["Live jobs", "/admin/live-dispatch"],
+  ["Orders", "/admin/orders-deliveries"],
+  ["Payments", "/admin/payments-payouts"],
+  ["Support", "/admin/support-disputes"],
+  ["Users", "/admin/user-management"],
+  ["Analytics", "/admin/analytics"],
+] as const;
+
+export function AdminScreen(props: AdminProps) {
+  const router = useRouter();
+
+  return (
+    <View style={styles.adminWrap}>
+      <BaseAdminScreen {...props} />
+      <View pointerEvents="box-none" style={styles.adminHotspots}>
+        {adminNav.map(([label, route]) => (
+          <Pressable
+            accessibilityLabel={`Open ${label}`}
+            key={label}
+            style={styles.adminHotspot}
+            onPress={() => router.replace(route as never)}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -197,5 +266,19 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: "#1857A6",
     fontFamily: "Inter_600SemiBold",
+  },
+  adminWrap: {
+    flex: 1,
+  },
+  adminHotspots: {
+    position: "absolute",
+    left: 16,
+    top: 76,
+    width: 158,
+    gap: 12,
+  },
+  adminHotspot: {
+    height: 36,
+    borderRadius: 8,
   },
 });
