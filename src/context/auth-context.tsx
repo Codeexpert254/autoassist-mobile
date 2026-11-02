@@ -12,7 +12,7 @@ import {
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { ProfileRow } from "@/types/database";
 
-export type AccountRole = "motorist" | "mechanic";
+export type AccountRole = "motorist" | "mechanic" | "partsdealer" | "towing" | "rider";
 
 type SignUpInput = {
   fullName: string;
