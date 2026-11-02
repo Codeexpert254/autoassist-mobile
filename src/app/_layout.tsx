@@ -5,6 +5,9 @@ import {
 } from "@expo-google-fonts/inter";
 import { Stack } from "expo-router";
 
+import { DemoToast } from "@/components/demo-toast";
+import { DemoAppProvider } from "@/context/demo-app-context";
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -14,11 +17,15 @@ export default function RootLayout() {
   if (!fontsLoaded) {
     return null;
   }
+
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-      }}
-    />
+    <DemoAppProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+      <DemoToast />
+    </DemoAppProvider>
   );
 }

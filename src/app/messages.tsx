@@ -1,159 +1,64 @@
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Messages() {
+  const router = useRouter();
+
   return (
     <View style={styles.messagesContainer}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Image
-            source={require("../../assets/images/left-arrow.png")}
-            style={styles.backIcon}
-          />
+          <Pressable onPress={() => router.back()}>
+            <Image source={require("../../assets/images/left-arrow.png")} style={styles.backIcon} />
+          </Pressable>
           <Text style={styles.title}>Messages</Text>
         </View>
-        <Text style={styles.subTitle}>
-          Keep conversations tied to jobs and orders.
-        </Text>
-        <View style={[styles.buttonContainer, styles.nairobiContainer]}>
-          <Text style={styles.buttonTitle}>Nairobi Auto Care</Text>
-          <Text style={styles.buttonSubTitle}>
-            I am 8 minutes away • Job #REP-1028{" "}
-          </Text>
-        </View>
-        <View style={[styles.buttonContainer, styles.kevinContainer]}>
-          <Text style={styles.buttonTitle}>Kevin M. • Rider</Text>
-          <Text style={styles.buttonSubTitle}>
-            I have collected your brake pads{" "}
-          </Text>
-        </View>
+        <Text style={styles.subTitle}>Keep conversations tied to jobs and orders.</Text>
 
-        <View style={[styles.buttonContainer, styles.autoassistContainer]}>
-          <Text style={styles.buttonTitle}>AutoAssist Support</Text>
-          <Text style={styles.buttonSubTitle}>
-            Your dispute ticket has been updated
-          </Text>
-        </View>
+        <MessageCard
+          title="Nairobi Auto Care"
+          subtitle="I am 8 minutes away • Job #REP-1028"
+          onPress={() => router.push("/orderchat")}
+        />
+        <MessageCard
+          title="Kevin M. • Rider"
+          subtitle="I have collected your brake pads"
+          onPress={() => router.push("/orderchat")}
+        />
+        <MessageCard
+          title="AutoAssist Support"
+          subtitle="Your dispute ticket has been updated"
+          onPress={() => router.push("/shared/support-ticket")}
+        />
       </SafeAreaView>
     </View>
   );
 }
 
+function MessageCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable style={styles.card} onPress={onPress}>
+      <View style={styles.copy}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardSubtitle}>{subtitle}</Text>
+      </View>
+      <Text style={styles.arrow}>›</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  messagesContainer: {
-    flex: 1,
-    backgroundColor: "#FFF",
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-
-  header: {
-    marginTop: 20,
-    gap: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  backIcon: {
-    width: 14,
-    height: 14,
-  },
-
-  title: {
-    color: "#102A43",
-    fontSize: 19,
-    fontFamily: "Inter_600SemiBold",
-  },
-
-  subTitle: {
-    color: "#667085",
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    marginBottom: 24,
-  },
-
-  underreview: {
-    height: 150,
-    borderRadius: 14,
-    borderColor: "#F5B942",
-    backgroundColor: "#FFF7E8",
-    borderWidth: 1,
-    padding: 18,
-    marginBottom: 24,
-  },
-
-  reviewTitle: {
-    color: "#D98200",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 24,
-  },
-
-  reviewSubTitle: {
-    color: "#102A43",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 22,
-  },
-
-  reviewText: {
-    color: "#667085",
-    marginTop: 10,
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-
-  buttonContainer: {
-    height: 78,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-    backgroundColor: "#FFF",
-    justifyContent: "center",
-    gap: 4,
-    padding: 14,
-  },
-
-  nairobiContainer: {
-    marginBottom: 16,
-  },
-
-  kevinContainer: {
-    marginBottom: 16,
-  },
-
-  buttonTitle: {
-    color: "#102A43",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 18,
-  },
-
-  buttonSubTitle: {
-    color: "#667085",
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 15,
-  },
-
-  submittedButton: {
-    height: 48,
-    borderColor: "#1857A6",
-    borderWidth: 1,
-    borderRadius: 10,
-    backgroundColor: "#FFF",
-    justifyContent: "center",
-  },
-
-  submittedText: {
-    color: "#1857A6",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-    lineHeight: 18,
-    textAlign: "center",
-  },
+  messagesContainer: { flex: 1, backgroundColor: "#FFFFFF" },
+  safeArea: { flex: 1, paddingHorizontal: 24 },
+  header: { marginTop: 20, gap: 12, flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  backIcon: { width: 14, height: 14 },
+  title: { color: "#102A43", fontSize: 19, fontFamily: "Inter_600SemiBold" },
+  subTitle: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 24 },
+  card: { minHeight: 78, borderRadius: 12, borderWidth: 1, borderColor: "#E4E7EC", backgroundColor: "#FFFFFF", padding: 14, marginBottom: 16, flexDirection: "row", alignItems: "center" },
+  copy: { flex: 1, gap: 5 },
+  cardTitle: { color: "#102A43", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  cardSubtitle: { color: "#667085", fontSize: 11, fontFamily: "Inter_400Regular" },
+  arrow: { color: "#1857A6", fontSize: 22, fontFamily: "Inter_600SemiBold" },
 });
