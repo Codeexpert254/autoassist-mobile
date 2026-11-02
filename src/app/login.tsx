@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -20,6 +20,11 @@ function isAccountRole(value: string | undefined): value is AccountRole {
   return Boolean(value && accountRoles.includes(value as AccountRole));
 }
 
+function getAuthErrorCode(error: unknown) {
+  if (!error || typeof error !== "object" || !("code" in error)) return "";
+  return String((error as { code?: unknown }).code ?? "");
+}
+
 export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -29,7 +34,11 @@ export default function Login() {
     needsConfirmation?: string;
   }>();
   const requestedRole = Array.isArray(params.role) ? params.role[0] : params.role;
-  const { backendEnabled, signIn, signOut } = useAuth();
+  const accountCreated = params.accountCreated === "1";
+  const needsConfirmation = params.needsConfirmation === "1";
+  const createdRole = isAccountRole(requestedRole) ? roleLabels[requestedRole] : "AutoAssist";
+
+  const { backendEnabled, signIn, signOut, resendConfirmation } = useAuth();
   const { login: demoLogin, selectRole } = useDemoApp();
   const [loginRole, setLoginRole] = useState<AccountRole>(isAccountRole(requestedRole) ? requestedRole : "motorist");
   const [email, setEmail] = useState(params.email ?? "");
@@ -37,13 +46,22 @@ export default function Login() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [showResend, setShowResend] = useState(needsConfirmation);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordIsValid = password.length >= 6;
   const formIsValid = emailIsValid && passwordIsValid;
-  const accountCreated = params.accountCreated === "1";
-  const needsConfirmation = params.needsConfirmation === "1";
-  const createdRole = isAccountRole(requestedRole) ? roleLabels[requestedRole] : "AutoAssist";
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const routeUser = (role: AccountRole) => {
     switch (role) {
@@ -67,6 +85,7 @@ export default function Login() {
   const handleLogin = async () => {
     setSubmitted(true);
     setServerError("");
+    setResendMessage("");
     if (!formIsValid || loading) return;
 
     setLoading(true);
@@ -92,9 +111,46 @@ export default function Login() {
       demoLogin(email);
       routeUser(loginRole);
     } catch (error) {
-      setServerError(error instanceof Error ? error.message : "Unable to log in. Please try again.");
+      const message = error instanceof Error ? error.message : "Unable to log in. Please try again.";
+      const code = getAuthErrorCode(error);
+      const emailNotConfirmed = code === "email_not_confirmed" || message.toLowerCase().includes("email not confirmed");
+
+      if (emailNotConfirmed) {
+        setShowResend(true);
+        setServerError("Your email is not confirmed yet. Use the button below to resend the AutoAssist confirmation email.");
+      } else {
+        setServerError(message);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setSubmitted(true);
+    setServerError("");
+    setResendMessage("");
+
+    if (!emailIsValid) {
+      setServerError("Enter the email address you used to create the account first.");
+      return;
+    }
+    if (resendLoading || resendCooldown > 0) return;
+
+    setResendLoading(true);
+    try {
+      if (!backendEnabled) {
+        setResendMessage("Developer Preview does not send confirmation emails.");
+        return;
+      }
+
+      await resendConfirmation(email);
+      setResendMessage("Confirmation email sent. Check your inbox and spam/junk folder, then confirm before logging in.");
+      setResendCooldown(60);
+    } catch (error) {
+      setServerError(error instanceof Error ? error.message : "Unable to resend the confirmation email. Please try again.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -122,6 +178,7 @@ export default function Login() {
                 onPress={() => {
                   setLoginRole(role);
                   setServerError("");
+                  setResendMessage("");
                 }}
                 style={[styles.roleChip, loginRole === role && styles.roleChipActive]}
               >
@@ -153,7 +210,10 @@ export default function Login() {
               autoCapitalize="none"
               autoCorrect={false}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(value) => {
+                setEmail(value);
+                setResendMessage("");
+              }}
             />
             {submitted && !emailIsValid ? (
               <Text style={styles.errorText}>Enter a valid email address.</Text>
@@ -177,6 +237,32 @@ export default function Login() {
           </View>
 
           {serverError ? <Text style={styles.serverError}>{serverError}</Text> : null}
+
+          {showResend ? (
+            <View style={styles.resendCard}>
+              <Text style={styles.resendTitle}>Didn't receive the confirmation email?</Text>
+              <Text style={styles.resendText}>
+                We can send a new AutoAssist confirmation email to the address above. Also check Spam or Junk.
+              </Text>
+              {resendMessage ? <Text style={styles.resendSuccess}>{resendMessage}</Text> : null}
+              <Pressable
+                disabled={!emailIsValid || resendLoading || resendCooldown > 0}
+                style={[
+                  styles.resendButton,
+                  (!emailIsValid || resendLoading || resendCooldown > 0) && styles.resendButtonDisabled,
+                ]}
+                onPress={() => void handleResendConfirmation()}
+              >
+                {resendLoading ? (
+                  <ActivityIndicator color="#1857A6" />
+                ) : (
+                  <Text style={styles.resendButtonText}>
+                    {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Resend confirmation email"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
 
           <Pressable onPress={() => router.push("/forgotpassword")}>
             <Text style={styles.forgotPassword}>Forgot password?</Text>
@@ -247,6 +333,13 @@ const styles = StyleSheet.create({
   errorInput: { borderColor: "#D9363E" },
   errorText: { color: "#D9363E", fontFamily: "Inter_400Regular", fontSize: 10, marginTop: 5 },
   serverError: { color: "#D9363E", backgroundColor: "#FFF1F2", borderRadius: 10, padding: 10, fontFamily: "Inter_400Regular", fontSize: 11, marginBottom: 12 },
+  resendCard: { backgroundColor: "#F5F9FE", borderWidth: 1, borderColor: "#B8D2F0", borderRadius: 12, padding: 12, marginBottom: 16 },
+  resendTitle: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 12, marginBottom: 4 },
+  resendText: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 10, lineHeight: 15 },
+  resendSuccess: { color: "#067647", fontFamily: "Inter_600SemiBold", fontSize: 10, lineHeight: 15, marginTop: 8 },
+  resendButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 10, backgroundColor: "#FFFFFF" },
+  resendButtonDisabled: { borderColor: "#B8D2F0", backgroundColor: "#F2F4F7" },
+  resendButtonText: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11 },
   forgotPassword: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#344054", alignSelf: "flex-end", marginBottom: 25 },
   loginButton: { width: "100%", height: 48, borderRadius: 12, justifyContent: "center", alignItems: "center", backgroundColor: "#1857A6" },
   loginButtonDisabled: { backgroundColor: "#A9C2DF" },
