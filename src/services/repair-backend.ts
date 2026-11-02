@@ -128,10 +128,11 @@ export async function getVerifiedMechanics() {
 }
 
 export async function getOwnedVehicles(userId: string) {
-  return requireSupabase()
-    .from("vehicles")
+  const table = requireSupabase().from("vehicles") as any;
+  return table
     .select("*")
     .eq("owner_id", userId)
+    .is("archived_at", null)
     .order("updated_at", { ascending: false });
 }
 
