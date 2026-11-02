@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,11 +7,25 @@ import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 import { getMechanicProfile } from "@/services/repair-backend";
 
+const roleLabels: Record<string, string> = {
+  motorist: "Motorist",
+  mechanic: "Mechanic",
+  partsdealer: "Parts Dealer",
+  towing: "Towing Agent",
+  rider: "Rider",
+};
+
 export default function Login() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    accountCreated?: string;
+    email?: string;
+    role?: string;
+    needsConfirmation?: string;
+  }>();
   const { backendEnabled, signIn } = useAuth();
-  const { login: demoLogin } = useDemoApp();
-  const [email, setEmail] = useState("");
+  const { state: demoState, login: demoLogin } = useDemoApp();
+  const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,6 +34,57 @@ export default function Login() {
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordIsValid = password.length >= 6;
   const formIsValid = emailIsValid && passwordIsValid;
+  const accountCreated = params.accountCreated === "1";
+  const needsConfirmation = params.needsConfirmation === "1";
+  const createdRole = roleLabels[params.role ?? ""] ?? "AutoAssist";
+
+  const routeDemoUser = () => {
+    switch (demoState.role) {
+      case "mechanic":
+        router.replace("/mechanic/registration");
+        break;
+      case "partsdealer":
+        router.replace("/partsdealer/registration");
+        break;
+      case "towing":
+        router.replace("/towing/registration");
+        break;
+      case "rider":
+        router.replace("/rider/registration");
+        break;
+      default:
+        router.replace("/motorist/home");
+    }
+  };
+
+  const routeAuthenticatedUser = async (profile: Awaited<ReturnType<typeof signIn>>) => {
+    switch (profile.role) {
+      case "mechanic": {
+        const mechanicResult = await getMechanicProfile(profile.id);
+        if (mechanicResult.error) throw mechanicResult.error;
+
+        if (!mechanicResult.data) {
+          router.replace("/mechanic/registration");
+        } else if (mechanicResult.data.verified) {
+          router.replace("/mechanic/dashboard");
+        } else {
+          router.replace("/mechanic/verification");
+        }
+        return;
+      }
+      case "partsdealer":
+        router.replace("/partsdealer/registration");
+        return;
+      case "towing":
+        router.replace("/towing/registration");
+        return;
+      case "rider":
+        router.replace("/rider/registration");
+        return;
+      default:
+        router.replace("/motorist/home");
+    }
+  };
 
   const handleLogin = async () => {
     setSubmitted(true);
@@ -30,28 +95,13 @@ export default function Login() {
     try {
       if (!backendEnabled) {
         demoLogin(email);
-        router.replace("/roleselection");
+        routeDemoUser();
         return;
       }
 
       const profile = await signIn(email, password);
       demoLogin(email);
-
-      if (profile.role !== "mechanic") {
-        router.replace("/motorist/home");
-        return;
-      }
-
-      const mechanicResult = await getMechanicProfile(profile.id);
-      if (mechanicResult.error) throw mechanicResult.error;
-
-      if (!mechanicResult.data) {
-        router.replace("/mechanic/registration");
-      } else if (mechanicResult.data.verified) {
-        router.replace("/mechanic/dashboard");
-      } else {
-        router.replace("/mechanic/verification");
-      }
+      await routeAuthenticatedUser(profile);
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to log in. Please try again.");
     } finally {
@@ -64,6 +114,17 @@ export default function Login() {
       <SafeAreaView style={styles.safeArea}>
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subTitle}>Log in to continue to AutoAssist.</Text>
+
+        {accountCreated ? (
+          <View style={styles.successBanner}>
+            <Text style={styles.successTitle}>Account created successfully</Text>
+            <Text style={styles.successText}>
+              {needsConfirmation
+                ? `Your ${createdRole} account is ready. Confirm your email, then log in below.`
+                : `Your ${createdRole} account is ready. Log in below to continue.`}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.emailContainer}>
           <Text style={styles.label}>Email</Text>
@@ -128,7 +189,7 @@ export default function Login() {
 
         <Pressable
           style={[styles.input, styles.createAccountButton]}
-          onPress={() => router.push("/register")}
+          onPress={() => router.push("/roleselection")}
         >
           <Text style={styles.createAccount}>Create a new account</Text>
         </Pressable>
@@ -149,7 +210,10 @@ const styles = StyleSheet.create({
   loginContainer: { flex: 1, backgroundColor: "#FFFFFF" },
   safeArea: { flex: 1, paddingHorizontal: 20, backgroundColor: "#FFFFFF" },
   title: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 22, marginTop: 20, marginBottom: 12 },
-  subTitle: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 13, marginBottom: 35 },
+  subTitle: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 13, marginBottom: 22 },
+  successBanner: { backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 20 },
+  successTitle: { color: "#067647", fontFamily: "Inter_600SemiBold", fontSize: 12, marginBottom: 4 },
+  successText: { color: "#344054", fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16 },
   emailContainer: { marginBottom: 18 },
   passwordContainer: { marginBottom: 10 },
   label: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#344054", marginBottom: 6 },
