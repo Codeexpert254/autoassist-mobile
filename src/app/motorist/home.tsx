@@ -36,8 +36,11 @@ export default function Home() {
 
         <Text style={styles.helpTitle}>What do you need help with?</Text>
 
-        <Pressable style={styles.primaryButton} onPress={() => router.push("/motorist/describe-problem")}>
-          <Text style={styles.primaryButtonText}>{hasActiveRepair ? "Start another car problem" : "Describe a car problem"}</Text>
+        <Pressable
+          style={styles.primaryButton}
+          onPress={() => router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/describe-problem")}
+        >
+          <Text style={styles.primaryButtonText}>{hasActiveRepair ? "View active repair" : "Describe a car problem"}</Text>
         </Pressable>
 
         <Text style={styles.quickServices}>Quick services</Text>
