@@ -14,8 +14,10 @@ import {
 
 export default function MechanicVerificationFunctional() {
   const router = useRouter();
-  const { backendEnabled, user } = useAuth();
+  const { backendEnabled, user, profile } = useAuth();
   const { state, submitVerification, refreshBackend } = useRepairFlow();
+  const providerType = profile?.provider_type === "garage" ? "garage" : "individual";
+  const isGarage = providerType === "garage";
   const [checklist, setChecklist] = useState<MechanicVerificationChecklist>({
     nationalId: state.verificationItems.nationalId,
     businessPermit: state.verificationItems.businessPermit,
@@ -75,10 +77,18 @@ export default function MechanicVerificationFunctional() {
     setChecklist((current) => ({ ...current, [key]: !current[key] }));
   };
 
-  const allReady = Object.values(checklist).every(Boolean);
+  const identityReady = isGarage ? checklist.businessPermit : checklist.nationalId;
+  const allReady = identityReady && checklist.certificates && checklist.profilePhoto;
 
   const submit = async () => {
     if (!allReady || loading) return;
+
+    const providerChecklist: MechanicVerificationChecklist = {
+      nationalId: isGarage ? false : checklist.nationalId,
+      businessPermit: isGarage ? checklist.businessPermit : false,
+      certificates: checklist.certificates,
+      profilePhoto: checklist.profilePhoto,
+    };
 
     if (!backendEnabled) {
       submitVerification();
@@ -94,8 +104,9 @@ export default function MechanicVerificationFunctional() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: submitError } = await submitMechanicVerification(user.id, checklist);
+      const { data, error: submitError } = await submitMechanicVerification(user.id, providerChecklist);
       if (submitError) throw submitError;
+      setChecklist(providerChecklist);
       setStatus(data.status === "rejected" ? "rejected" : "pending");
       submitVerification();
       await refreshBackend();
@@ -127,7 +138,7 @@ export default function MechanicVerificationFunctional() {
             <Text style={styles.backText}>‹</Text>
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Mechanic verification</Text>
+            <Text style={styles.title}>{isGarage ? "Garage verification" : "Individual mechanic verification"}</Text>
             <Text style={styles.subtitle}>Verification protects motorists and trusted service providers.</Text>
           </View>
         </View>
@@ -146,7 +157,7 @@ export default function MechanicVerificationFunctional() {
               <SymbolView name="clock.fill" size={28} tintColor="#D98200" />
               <View style={styles.statusCopy}>
                 <Text style={styles.pendingTitle}>Verification under review</Text>
-                <Text style={styles.statusText}>Your checklist has been submitted. AutoAssist must approve the provider before live jobs become available.</Text>
+                <Text style={styles.statusText}>Your verification has been submitted. AutoAssist must approve the provider before live jobs become available.</Text>
               </View>
             </View>
           ) : status === "rejected" ? (
@@ -159,16 +170,23 @@ export default function MechanicVerificationFunctional() {
             </View>
           ) : (
             <View style={styles.introCard}>
-              <Text style={styles.introTitle}>Complete all four checks</Text>
-              <Text style={styles.introText}>Confirm that each required document is ready for provider review. The account will remain pending until an administrator approves it.</Text>
+              <Text style={styles.introTitle}>{isGarage ? "Verify the garage/business" : "Verify your identity"}</Text>
+              <Text style={styles.introText}>
+                {isGarage
+                  ? "A valid business permit is the required identity document for this garage account. Also confirm your certificates and business/profile photo."
+                  : "Your National ID is the required identity document for this individual mechanic account. Also confirm your certificates and profile photo."}
+              </Text>
             </View>
           )}
 
           <View style={styles.list}>
-            <ChecklistCard title="National ID" subtitle="Identity document ready for review" checked={checklist.nationalId} onPress={() => toggle("nationalId")} disabled={status === "pending" || approved} />
-            <ChecklistCard title="Business permit" subtitle="Current garage/business permit" checked={checklist.businessPermit} onPress={() => toggle("businessPermit")} disabled={status === "pending" || approved} />
+            {isGarage ? (
+              <ChecklistCard title="Business permit" subtitle="Valid garage/business permit ready for review" checked={checklist.businessPermit} onPress={() => toggle("businessPermit")} disabled={status === "pending" || approved} />
+            ) : (
+              <ChecklistCard title="National ID" subtitle="Your National ID ready for identity review" checked={checklist.nationalId} onPress={() => toggle("nationalId")} disabled={status === "pending" || approved} />
+            )}
             <ChecklistCard title="Skill certificates" subtitle="Relevant training or trade certificates" checked={checklist.certificates} onPress={() => toggle("certificates")} disabled={status === "pending" || approved} />
-            <ChecklistCard title="Profile photo" subtitle="Clear professional profile photo" checked={checklist.profilePhoto} onPress={() => toggle("profilePhoto")} disabled={status === "pending" || approved} />
+            <ChecklistCard title={isGarage ? "Business / profile photo" : "Profile photo"} subtitle={isGarage ? "Clear garage or professional business image" : "Clear professional profile photo"} checked={checklist.profilePhoto} onPress={() => toggle("profilePhoto")} disabled={status === "pending" || approved} />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -189,7 +207,7 @@ export default function MechanicVerificationFunctional() {
 
           {!approved && status === "pending" ? (
             <Pressable style={styles.dashboardLink} onPress={() => router.replace("/mechanic/dashboard")}>
-              <Text style={styles.dashboardLinkText}>View dashboard in pending mode</Text>
+              <Text style={styles.dashboardLinkText}>Return to mechanic dashboard</Text>
             </Pressable>
           ) : null}
         </ScrollView>
