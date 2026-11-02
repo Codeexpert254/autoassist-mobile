@@ -22,6 +22,12 @@ export type Database = {
         Update: { created_at?: string; garage_name?: string; location?: string; rating?: number; reviews_count?: number; services?: string[]; updated_at?: string; user_id?: string; verified?: boolean };
         Relationships: [];
       };
+      mechanic_verification_submissions: {
+        Row: { business_permit_confirmed: boolean; certificates_confirmed: boolean; national_id_confirmed: boolean; profile_photo_confirmed: boolean; review_note: string | null; reviewed_at: string | null; status: string; submitted_at: string; updated_at: string; user_id: string };
+        Insert: { business_permit_confirmed?: boolean; certificates_confirmed?: boolean; national_id_confirmed?: boolean; profile_photo_confirmed?: boolean; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id: string };
+        Update: { business_permit_confirmed?: boolean; certificates_confirmed?: boolean; national_id_confirmed?: boolean; profile_photo_confirmed?: boolean; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id?: string };
+        Relationships: [];
+      };
       profiles: {
         Row: { created_at: string; full_name: string; id: string; phone: string; role: string; updated_at: string };
         Insert: { created_at?: string; full_name?: string; id: string; phone?: string; role?: string; updated_at?: string };
@@ -68,6 +74,7 @@ export type Database = {
 
 export type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export type MechanicProfileRow = Database["public"]["Tables"]["mechanic_profiles"]["Row"];
+export type MechanicVerificationRow = Database["public"]["Tables"]["mechanic_verification_submissions"]["Row"];
 export type VehicleRow = Database["public"]["Tables"]["vehicles"]["Row"];
 export type RepairRequestRow = Database["public"]["Tables"]["repair_requests"]["Row"];
 export type InspectionRow = Database["public"]["Tables"]["inspections"]["Row"];
