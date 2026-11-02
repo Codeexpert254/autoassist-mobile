@@ -34,7 +34,13 @@
         }
       ],
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow AutoAssist to use your location to find nearby mechanics and create service requests."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
