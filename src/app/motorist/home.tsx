@@ -4,17 +4,15 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useDemoApp } from "@/context/demo-app-context";
+import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
 
 export default function Home() {
   const router = useRouter();
-  const { state } = useDemoApp();
-  const firstName = state.user.name.split(" ")[0] || "Motorist";
+  const { state: demoState } = useDemoApp();
+  const { state } = useRepairFlow();
+  const firstName = demoState.user.name.split(" ")[0] || "Motorist";
   const vehicleName = `${state.vehicle.make} ${state.vehicle.model}`.trim();
-
-  const activityStatus =
-    state.mechanicRequestStatus === "idle"
-      ? "Demo ready • choose a service below"
-      : state.mechanicRequestStatus;
+  const hasActiveRepair = !["idle", "cancelled", "completed"].includes(state.status);
 
   return (
     <View style={styles.homeContainer}>
@@ -33,13 +31,13 @@ export default function Home() {
             <Text style={styles.vehicleModel}>{vehicleName}</Text>
             <Image source={require("../../../assets/images/left-arrow.png")} style={styles.vehicleArrow} />
           </View>
-          <Text style={styles.vehicleReg}>{state.vehicle.year} • {state.vehicle.registration}</Text>
+          <Text style={styles.vehicleReg}>{state.vehicle.year} • {state.vehicle.registration} • {state.vehicle.powerSource}</Text>
         </Pressable>
 
         <Text style={styles.helpTitle}>What do you need help with?</Text>
 
         <Pressable style={styles.primaryButton} onPress={() => router.push("/motorist/describe-problem")}>
-          <Text style={styles.primaryButtonText}>Describe a car problem</Text>
+          <Text style={styles.primaryButtonText}>{hasActiveRepair ? "Start another car problem" : "Describe a car problem"}</Text>
         </Pressable>
 
         <Text style={styles.quickServices}>Quick services</Text>
@@ -49,11 +47,11 @@ export default function Home() {
           <ServiceCard label="TOWING" icon={require("../../../assets/images/towingicon.png")} onPress={() => router.push("/motorist/request-towing")} />
         </View>
 
-        <Text style={styles.recentActivity}>Live demo activity</Text>
-        <Pressable style={styles.activityContainer} onPress={() => router.push("/motorist/history")}>
-          <Text style={styles.activity}>Repair request</Text>
-          <Text style={styles.activityStatus}>{activityStatus}</Text>
-          <Text style={styles.activityDetails}>View jobs & history</Text>
+        <Text style={styles.recentActivity}>{hasActiveRepair ? "Active repair" : "Recent activity"}</Text>
+        <Pressable style={styles.activityContainer} onPress={() => router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/history")}>
+          <Text style={styles.activity}>{state.requestId ? `Repair ${state.requestId}` : "Repair request"}</Text>
+          <Text style={styles.activityStatus}>{repairStatusLabel(state.status)}</Text>
+          <Text style={styles.activityDetails}>{hasActiveRepair ? "View live repair" : "View jobs & history"}</Text>
         </Pressable>
 
         <View style={styles.bottomNav}>
@@ -111,7 +109,7 @@ const styles = StyleSheet.create({
   recentActivity: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 38, marginBottom: 16 },
   activityContainer: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderWidth: 1, minHeight: 105, borderRadius: 14, paddingHorizontal: 16, gap: 6, justifyContent: "center" },
   activity: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", textTransform: "capitalize" },
+  activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular" },
   activityDetails: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   bottomNav: { marginTop: "auto", height: 64, borderTopWidth: 1, borderTopColor: "#E4E7EC", flexDirection: "row", marginHorizontal: -24 },
   navItem: { flex: 1, alignItems: "center", justifyContent: "center" },
