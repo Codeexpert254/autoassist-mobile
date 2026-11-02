@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -32,8 +32,8 @@ const quickServices = [
 
 export default function Home() {
   const router = useRouter();
-  const { backendEnabled, profile } = useAuth();
-  const { state: demoState } = useDemoApp();
+  const { backendEnabled, profile, signOut } = useAuth();
+  const { state: demoState, logout: demoLogout } = useDemoApp();
   const { state } = useRepairFlow();
   const displayName = profile?.full_name || demoState.user.name;
   const firstName = displayName.split(" ")[0] || "Motorist";
@@ -54,16 +54,52 @@ export default function Home() {
     router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/describe-problem");
   };
 
+  const performLogout = async () => {
+    try {
+      if (backendEnabled) {
+        await signOut();
+      }
+      demoLogout();
+      router.replace("/login");
+    } catch (error) {
+      Alert.alert(
+        "Unable to log out",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    }
+  };
+
+  const confirmLogout = () => {
+    Alert.alert(
+      "Log out of AutoAssist?",
+      "You will need to log in again to access your account.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Log out", style: "destructive", onPress: () => void performLogout() },
+      ],
+    );
+  };
+
   return (
     <View style={styles.homeContainer}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.heading}>
           <Text style={styles.subTitle}>Good afternoon</Text>
-          {!backendEnabled ? (
-            <Pressable onPress={() => router.push("/preview")}>
-              <Text style={styles.previewLink}>Preview</Text>
+          <View style={styles.headerActions}>
+            {!backendEnabled ? (
+              <Pressable onPress={() => router.push("/preview")}>
+                <Text style={styles.previewLink}>Preview</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={styles.logoutButton} onPress={confirmLogout}>
+              <SymbolView
+                name={{ ios: "rectangle.portrait.and.arrow.right", android: "logout", web: "logout" } as never}
+                size={16}
+                tintColor="#B42318"
+              />
+              <Text style={styles.logoutText}>Logout</Text>
             </Pressable>
-          ) : null}
+          </View>
         </View>
         <Text style={styles.title}>{firstName}</Text>
 
@@ -162,8 +198,11 @@ const styles = StyleSheet.create({
   homeContainer: { flex: 1, backgroundColor: "#FFFFFF" },
   safeArea: { flex: 1, paddingHorizontal: 24 },
   heading: { marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
   subTitle: { color: "#667085", fontSize: 13, fontFamily: "Inter_400Regular" },
   previewLink: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  logoutButton: { minHeight: 34, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: "#F4C7C3", backgroundColor: "#FFF5F4", flexDirection: "row", alignItems: "center", gap: 6 },
+  logoutText: { color: "#B42318", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   title: { color: "#102A43", fontSize: 23, fontFamily: "Inter_600SemiBold", marginTop: 4, marginBottom: 18 },
   vehicleContainer: { backgroundColor: "#123D76", minHeight: 105, padding: 16, gap: 10, borderRadius: 14, marginBottom: 32 },
   vehicleInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
