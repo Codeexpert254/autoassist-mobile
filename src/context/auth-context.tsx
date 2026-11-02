@@ -14,6 +14,7 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type { ProfileRow } from "@/types/database";
 
 export type AccountRole = "motorist" | "mechanic" | "partsdealer" | "towing" | "rider";
+export type MechanicProviderType = "individual" | "garage";
 
 type SignUpInput = {
   fullName: string;
@@ -21,6 +22,7 @@ type SignUpInput = {
   phone: string;
   password: string;
   role: AccountRole;
+  providerType?: MechanicProviderType;
 };
 
 type AuthContextValue = {
@@ -146,6 +148,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = supabase;
     if (!client) throw new Error("Live backend is not configured on this device.");
 
+    if (input.role === "mechanic" && !input.providerType) {
+      throw new Error("Choose Individual mechanic or Garage / business before creating a Mechanic account.");
+    }
+
     const emailRedirectTo = Linking.createURL("login");
 
     const { data, error } = await client.auth.signUp({
@@ -157,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           full_name: input.fullName.trim(),
           phone: input.phone.trim(),
           role: input.role,
+          provider_type: input.role === "mechanic" ? input.providerType : null,
         },
       },
     });
