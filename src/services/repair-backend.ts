@@ -88,20 +88,28 @@ export async function getMechanicProfile(userId: string) {
 
 export async function saveMechanicProfile(
   userId: string,
-  input: { garageName: string; location: string; services: string[] },
+  input: {
+    providerType: "individual" | "garage";
+    garageName: string;
+    location: string;
+    services: string[];
+  },
 ) {
   const client = requireSupabase();
   const existing = await getMechanicProfile(userId);
   if (existing.error) throw existing.error;
 
+  const payload = {
+    provider_type: input.providerType,
+    garage_name: input.garageName.trim(),
+    location: input.location.trim(),
+    services: input.services,
+  };
+
   if (existing.data) {
     return client
       .from("mechanic_profiles")
-      .update({
-        garage_name: input.garageName.trim(),
-        location: input.location.trim(),
-        services: input.services,
-      })
+      .update(payload)
       .eq("user_id", userId)
       .select()
       .single();
@@ -111,9 +119,7 @@ export async function saveMechanicProfile(
     .from("mechanic_profiles")
     .insert({
       user_id: userId,
-      garage_name: input.garageName.trim(),
-      location: input.location.trim(),
-      services: input.services,
+      ...payload,
     })
     .select()
     .single();
