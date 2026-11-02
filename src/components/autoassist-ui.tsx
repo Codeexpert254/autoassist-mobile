@@ -12,6 +12,10 @@ import {
   type Tone,
 } from "./autoassist-ui-base";
 import {
+  MotoristMechanicFlow,
+  isMotoristMechanicFunctionalPath,
+} from "./motorist-mechanic-flow";
+import {
   getBottomTarget,
   primaryNext,
   secondaryNext,
@@ -22,29 +26,9 @@ export { ScreenHeader, BaseBottomNav as BottomNav };
 export type { ScreenBlock, StaticScreenProps, Tone };
 
 const contextualNext: Record<string, { label: string; route: string }> = {
-  "/motorist/mechanic-results": {
-    label: "Open top mechanic",
-    route: "/motorist/mechanic-profile",
-  },
   "/motorist/spare-parts": {
     label: "View brake pad set",
     route: "/motorist/part-details",
-  },
-  "/motorist/finding-mechanic": {
-    label: "Simulate mechanic acceptance",
-    route: "/motorist/mechanic-assigned",
-  },
-  "/motorist/mechanic-assigned": {
-    label: "Simulate arrival & inspection",
-    route: "/motorist/inspection-quote",
-  },
-  "/motorist/repair-progress": {
-    label: "Simulate repair completion",
-    route: "/motorist/service-payment",
-  },
-  "/mechanic/awaiting-approval": {
-    label: "Simulate customer approval",
-    route: "/mechanic/work-progress",
   },
   "/partsdealer/inventory": {
     label: "Add new part",
@@ -57,6 +41,10 @@ export function StaticScreen(props: StaticScreenProps) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { performAction, getStatusForPath } = useDemoApp();
+
+  if (isMotoristMechanicFunctionalPath(pathname)) {
+    return <MotoristMechanicFlow pathname={pathname} />;
+  }
 
   const next = primaryNext[pathname];
   const secondary = secondaryNext[pathname];
