@@ -128,7 +128,9 @@ export default function DescribeProblemFunctional() {
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Describe the problem</Text>
             <Text style={styles.subtitle}>
-              {state.vehicle.make} {state.vehicle.model} • {state.vehicle.year} • {state.vehicle.powerSource}
+              {state.vehicleSaved
+                ? `${state.vehicle.make} ${state.vehicle.model} • ${state.vehicle.year} • ${state.vehicle.powerSource}`
+                : "Vehicle details are optional — you can add them later."}
             </Text>
           </View>
         </View>
@@ -257,7 +259,9 @@ export default function DescribeProblemFunctional() {
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>What happens next?</Text>
             <Text style={styles.infoText}>
-              We will use the problem, vehicle and location details to show matching nearby mechanics. The final diagnosis and price will come after a mechanic inspects the vehicle.
+              {state.vehicleSaved
+                ? "We will use the problem, vehicle and location details to show matching nearby mechanics. The final diagnosis and price will come after a mechanic inspects the vehicle."
+                : "We will use the problem and location details to show matching nearby mechanics. You can add vehicle details later for more precise matching. The final diagnosis and price will come after a mechanic inspects the vehicle."}
             </Text>
           </View>
 
