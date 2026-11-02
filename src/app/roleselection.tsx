@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { type DemoRole, useDemoApp } from "@/context/demo-app-context";
+import { useRepairFlow } from "@/context/repair-flow-context";
 
 const roles = [
   {
@@ -47,12 +48,17 @@ const roles = [
 export default function RoleSelection() {
   const router = useRouter();
   const { selectRole } = useDemoApp();
+  const { state: repairState } = useRepairFlow();
   const [selected, setSelected] = useState(0);
   const current = roles[selected];
 
   const handleContinue = () => {
     selectRole(current.key as DemoRole);
-    router.replace(current.route as never);
+    const route =
+      current.key === "mechanic" && repairState.mechanicProfile.verified
+        ? "/mechanic/dashboard"
+        : current.route;
+    router.replace(route as never);
   };
 
   return (
@@ -70,6 +76,7 @@ export default function RoleSelection() {
         <View style={styles.roleList}>
           {roles.map((role, index) => {
             const active = selected === index;
+            const verifiedMechanic = role.key === "mechanic" && repairState.mechanicProfile.verified;
             return (
               <Pressable
                 key={role.key}
@@ -81,7 +88,9 @@ export default function RoleSelection() {
                 </View>
                 <View style={styles.roleContent}>
                   <Text style={styles.buttonTitle}>{role.title}</Text>
-                  <Text style={styles.buttonSubTitle}>{role.subtitle}</Text>
+                  <Text style={styles.buttonSubTitle}>
+                    {verifiedMechanic ? "Verified • open mechanic dashboard" : role.subtitle}
+                  </Text>
                 </View>
                 <View style={[styles.selectIndicator, active ? styles.active : styles.inactive]} />
               </Pressable>
