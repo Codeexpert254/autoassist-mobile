@@ -6,6 +6,7 @@ import {
 import { Stack } from "expo-router";
 
 import { DemoToast } from "@/components/demo-toast";
+import { AuthProvider } from "@/context/auth-context";
 import { DemoAppProvider } from "@/context/demo-app-context";
 import { RepairFlowProvider } from "@/context/repair-flow-context";
 
@@ -20,15 +21,17 @@ export default function RootLayout() {
   }
 
   return (
-    <DemoAppProvider>
-      <RepairFlowProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        />
-        <DemoToast />
-      </RepairFlowProvider>
-    </DemoAppProvider>
+    <AuthProvider>
+      <DemoAppProvider>
+        <RepairFlowProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          />
+          <DemoToast />
+        </RepairFlowProvider>
+      </DemoAppProvider>
+    </AuthProvider>
   );
 }
