@@ -1,5 +1,5 @@
 export const primaryNext: Record<string, string> = {
-  "/motorist/describe-problem": "/motorist/preliminary-estimate",
+  "/motorist/describe-problem": "/motorist/mechanic-results",
   "/motorist/preliminary-estimate": "/motorist/mechanic-results",
   "/motorist/mechanic-profile": "/motorist/confirm-request",
   "/motorist/confirm-request": "/motorist/finding-mechanic",
