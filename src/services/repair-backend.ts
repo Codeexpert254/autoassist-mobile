@@ -89,7 +89,7 @@ export async function getMechanicProfile(userId: string) {
 export async function saveMechanicProfile(
   userId: string,
   input: {
-    providerType: "individual" | "garage";
+    providerType?: "individual" | "garage";
     garageName: string;
     location: string;
     services: string[];
@@ -99,8 +99,11 @@ export async function saveMechanicProfile(
   const existing = await getMechanicProfile(userId);
   if (existing.error) throw existing.error;
 
+  const providerType = input.providerType ??
+    (existing.data?.provider_type === "garage" ? "garage" : "individual");
+
   const payload = {
-    provider_type: input.providerType,
+    provider_type: providerType,
     garage_name: input.garageName.trim(),
     location: input.location.trim(),
     services: input.services,
