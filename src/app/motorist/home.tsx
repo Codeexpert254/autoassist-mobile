@@ -4,6 +4,7 @@ import { SymbolView } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
 
@@ -30,9 +31,11 @@ const quickServices = [
 
 export default function Home() {
   const router = useRouter();
+  const { backendEnabled, profile } = useAuth();
   const { state: demoState } = useDemoApp();
   const { state } = useRepairFlow();
-  const firstName = demoState.user.name.split(" ")[0] || "Motorist";
+  const displayName = profile?.full_name || demoState.user.name;
+  const firstName = displayName.split(" ")[0] || "Motorist";
   const vehicleName = `${state.vehicle.make} ${state.vehicle.model}`.trim();
   const hasActiveRepair = !["idle", "cancelled", "completed"].includes(state.status);
 
@@ -41,9 +44,11 @@ export default function Home() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.heading}>
           <Text style={styles.subTitle}>Good afternoon</Text>
-          <Pressable onPress={() => router.push("/preview")}>
-            <Text style={styles.previewLink}>Preview</Text>
-          </Pressable>
+          {!backendEnabled ? (
+            <Pressable onPress={() => router.push("/preview")}>
+              <Text style={styles.previewLink}>Preview</Text>
+            </Pressable>
+          ) : null}
         </View>
         <Text style={styles.title}>{firstName}</Text>
 
