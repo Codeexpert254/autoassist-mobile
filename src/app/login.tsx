@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
+import { getMechanicProfile } from "@/services/repair-backend";
 
 export default function Login() {
   const router = useRouter();
@@ -36,9 +37,21 @@ export default function Login() {
       const profile = await signIn(email, password);
       demoLogin(email);
 
-      router.replace(
-        profile.role === "mechanic" ? "/mechanic/registration" : "/motorist/home",
-      );
+      if (profile.role !== "mechanic") {
+        router.replace("/motorist/home");
+        return;
+      }
+
+      const mechanicResult = await getMechanicProfile(profile.id);
+      if (mechanicResult.error) throw mechanicResult.error;
+
+      if (!mechanicResult.data) {
+        router.replace("/mechanic/registration");
+      } else if (mechanicResult.data.verified) {
+        router.replace("/mechanic/dashboard");
+      } else {
+        router.replace("/mechanic/verification");
+      }
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to log in. Please try again.");
     } finally {
