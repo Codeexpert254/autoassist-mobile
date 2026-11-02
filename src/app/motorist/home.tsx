@@ -51,10 +51,6 @@ export default function Home() {
   };
 
   const openProblemFlow = () => {
-    if (!hasVehicle) {
-      router.push({ pathname: "/motorist/addavehicle", params: { mode: "add" } });
-      return;
-    }
     router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/describe-problem");
   };
 
@@ -80,7 +76,7 @@ export default function Home() {
           <Text style={styles.vehicleReg}>
             {hasVehicle
               ? `${state.vehicle.year} • ${state.vehicle.registration} • ${vehiclePowerSource}`
-              : "Add vehicle details for better mechanic and parts matching"}
+              : "Optional — add vehicle details anytime for more precise matching"}
           </Text>
         </Pressable>
 
@@ -91,7 +87,7 @@ export default function Home() {
           onPress={openProblemFlow}
         >
           <Text style={styles.primaryButtonText}>
-            {!hasVehicle ? "Add a vehicle to continue" : hasActiveRepair ? "View active repair" : "Describe a car problem"}
+            {hasActiveRepair ? "View active repair" : "Describe a car problem"}
           </Text>
         </Pressable>
 
