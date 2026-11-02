@@ -1,12 +1,13 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useRepairFlow } from "@/context/repair-flow-context";
 import {
+  deleteMotoristVehicle,
   getMotoristVehicles,
   inferFuelType,
   normalizePowerSource,
@@ -15,8 +16,10 @@ import {
 export default function VehicleDetails() {
   const router = useRouter();
   const { user, profile } = useAuth();
-  const { state, liveBackend } = useRepairFlow();
+  const { state, liveBackend, refreshBackend } = useRepairFlow();
   const [liveVehicle, setLiveVehicle] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     if (!liveBackend || !user || profile?.role !== "motorist") return;
@@ -55,6 +58,36 @@ export default function VehicleDetails() {
       transmission: state.vehicle.transmission,
     };
   }, [liveVehicle, state.vehicle]);
+
+  const handleDeleteVehicle = () => {
+    if (!user || !liveVehicle?.id || deleting) return;
+
+    Alert.alert(
+      "Delete vehicle?",
+      `Remove ${vehicle.make} ${vehicle.model} (${vehicle.registration}) from AutoAssist? If it has past repair jobs, those records will stay in your service history.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete vehicle",
+          style: "destructive",
+          onPress: () => {
+            setDeleting(true);
+            setDeleteError("");
+            void deleteMotoristVehicle(user.id, liveVehicle.id)
+              .then(async ({ error }) => {
+                if (error) throw error;
+                await refreshBackend();
+                router.replace("/motorist/home");
+              })
+              .catch((error) => {
+                setDeleteError(error instanceof Error ? error.message : "Unable to delete this vehicle. Please try again.");
+              })
+              .finally(() => setDeleting(false));
+          },
+        },
+      ],
+    );
+  };
 
   if (!state.vehicleSaved && !liveVehicle) {
     return (
@@ -114,6 +147,22 @@ export default function VehicleDetails() {
           >
             <Text style={styles.secondaryButtonText}>Add another vehicle</Text>
           </Pressable>
+
+          {liveBackend && liveVehicle?.id ? (
+            <Pressable
+              disabled={deleting}
+              style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+              onPress={handleDeleteVehicle}
+            >
+              {deleting ? (
+                <ActivityIndicator color="#B42318" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete vehicle</Text>
+              )}
+            </Pressable>
+          ) : null}
+
+          {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -161,6 +210,10 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   secondaryButton: { height: 48, borderRadius: 12, borderWidth: 1, borderColor: "#1857A6", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 12 },
   secondaryButtonText: { color: "#1857A6", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  deleteButton: { height: 48, borderRadius: 12, borderWidth: 1, borderColor: "#FDA29B", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 20 },
+  deleteButtonDisabled: { opacity: 0.6 },
+  deleteButtonText: { color: "#B42318", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  deleteError: { color: "#B42318", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 8, textAlign: "center" },
   emptyState: { marginTop: 40, borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 16, padding: 20 },
   emptyTitle: { color: "#102A43", fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptyText: { color: "#667085", fontSize: 12, lineHeight: 18, fontFamily: "Inter_400Regular", marginTop: 8, marginBottom: 20 },
