@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -9,6 +9,7 @@ import { useRepairFlow } from "@/context/repair-flow-context";
 import {
   type VehicleFuelType,
   type VehiclePowerSource,
+  deleteMotoristVehicle,
   getMotoristVehicles,
   inferFuelType,
   normalizePowerSource,
@@ -38,11 +39,14 @@ export default function AddVehicle() {
   );
   const [transmission, setTransmission] = useState(isEditing ? state.vehicle.transmission : "");
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [currentVehicleId, setCurrentVehicleId] = useState<string | null>(null);
+  const [currentVehicleLabel, setCurrentVehicleLabel] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isEditing || !liveBackend || !user || profile?.role !== "motorist") return;
+    if (!liveBackend || !user || profile?.role !== "motorist") return;
 
     let mounted = true;
 
@@ -54,7 +58,16 @@ export default function AddVehicle() {
       }
 
       const vehicle = data?.[0];
-      if (!vehicle) return;
+      if (!vehicle) {
+        setCurrentVehicleId(null);
+        setCurrentVehicleLabel("");
+        return;
+      }
+
+      setCurrentVehicleId(vehicle.id);
+      setCurrentVehicleLabel(`${vehicle.make} ${vehicle.model} • ${vehicle.registration}`);
+
+      if (!isEditing) return;
 
       setEditingVehicleId(vehicle.id);
       setMake(vehicle.make);
@@ -133,6 +146,49 @@ export default function AddVehicle() {
       setSaving(false);
     }
   };
+
+  const handleDelete = () => {
+    if (!liveBackend || !user || profile?.role !== "motorist" || deleting) return;
+
+    const targetVehicleId = isEditing ? editingVehicleId : currentVehicleId;
+    if (!targetVehicleId) return;
+
+    const title = isEditing ? "Delete vehicle?" : "Delete current vehicle?";
+    const vehicleLabel = currentVehicleLabel || "this vehicle";
+
+    Alert.alert(
+      title,
+      `Remove ${vehicleLabel} from AutoAssist? If it has previous repair history, the vehicle will be hidden from your active vehicles but kept in those past job records.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete vehicle",
+          style: "destructive",
+          onPress: () => {
+            setDeleting(true);
+            setErrorMessage(null);
+
+            void deleteMotoristVehicle(user.id, targetVehicleId)
+              .then(async ({ error }) => {
+                if (error) throw error;
+                await refreshBackend();
+                router.replace("/motorist/home");
+              })
+              .catch((error) => {
+                setErrorMessage(error instanceof Error ? error.message : "Unable to delete this vehicle.");
+              })
+              .finally(() => setDeleting(false));
+          },
+        },
+      ],
+    );
+  };
+
+  const canDeleteCurrentVehicle =
+    liveBackend &&
+    Boolean(user) &&
+    profile?.role === "motorist" &&
+    Boolean(isEditing ? editingVehicleId : currentVehicleId);
 
   return (
     <View style={styles.screen}>
@@ -222,6 +278,26 @@ export default function AddVehicle() {
               {saving ? "Saving..." : isEditing ? "Save changes" : "Add vehicle"}
             </Text>
           </Pressable>
+
+          {canDeleteCurrentVehicle ? (
+            <View style={styles.dangerZone}>
+              <Text style={styles.dangerTitle}>{isEditing ? "Remove this vehicle" : "Manage current vehicle"}</Text>
+              <Text style={styles.dangerText}>
+                {isEditing
+                  ? "Delete this vehicle if you no longer own or use it."
+                  : `You are adding another vehicle. You can also remove your current vehicle${currentVehicleLabel ? `: ${currentVehicleLabel}` : ""}.`}
+              </Text>
+              <Pressable
+                disabled={deleting}
+                style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+                onPress={handleDelete}
+              >
+                <Text style={styles.deleteButtonText}>
+                  {deleting ? "Deleting..." : isEditing ? "Delete vehicle" : "Delete current vehicle"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -263,4 +339,10 @@ const styles = StyleSheet.create({
   saveButton: { height: 48, borderRadius: 12, backgroundColor: "#1857A6", justifyContent: "center", marginTop: 10 },
   saveButtonDisabled: { backgroundColor: "#A9C2DF" },
   saveText: { color: "#FFFFFF", fontFamily: "Inter_600SemiBold", fontSize: 14, textAlign: "center" },
+  dangerZone: { marginTop: 22, paddingTop: 20, borderTopWidth: 1, borderTopColor: "#EAECF0" },
+  dangerTitle: { color: "#B42318", fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 6 },
+  dangerText: { color: "#667085", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular", marginBottom: 12 },
+  deleteButton: { height: 48, borderRadius: 12, borderWidth: 1, borderColor: "#D92D20", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  deleteButtonDisabled: { opacity: 0.55 },
+  deleteButtonText: { color: "#B42318", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
