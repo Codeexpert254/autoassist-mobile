@@ -29,7 +29,7 @@ create table if not exists public.vehicles (
   year integer not null check (year between 1900 and 2100),
   registration text not null,
   power_source text not null check (power_source in ('Petrol', 'Diesel', 'Hybrid', 'Electric', 'LPG')),
-  transmission text not null,
+  transmission text not null check (transmission in ('Automatic', 'Manual')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(owner_id, registration)
@@ -61,9 +61,9 @@ create table if not exists public.inspections (
   id uuid primary key default gen_random_uuid(),
   request_id uuid not null unique references public.repair_requests(id) on delete cascade,
   mechanic_id uuid not null references public.profiles(id) on delete cascade,
-  brake_pads text not null,
-  brake_discs text not null,
-  brake_fluid text not null,
+  brake_pads text not null check (brake_pads in ('Replace', 'Serviceable')),
+  brake_discs text not null check (brake_discs in ('Replace', 'Serviceable')),
+  brake_fluid text not null check (brake_fluid in ('Low', 'Normal')),
   notes text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -114,6 +114,7 @@ create index if not exists repair_events_request_id_idx on public.repair_events(
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -125,7 +126,7 @@ create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   insert into public.profiles (id, full_name, phone, role)
@@ -145,17 +146,163 @@ begin
 end;
 $$;
 
-create or replace function public.log_repair_status_change()
+create or replace function public.protect_profile_role()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if current_user not in ('postgres', 'service_role') and new.role is distinct from old.role then
+    raise exception 'profile role cannot be changed from the client';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_mechanic_system_fields()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if current_user not in ('postgres', 'service_role') then
+    if tg_op = 'INSERT' then
+      new.verified := false;
+      new.rating := 0;
+      new.reviews_count := 0;
+    else
+      if new.verified is distinct from old.verified
+         or new.rating is distinct from old.rating
+         or new.reviews_count is distinct from old.reviews_count then
+        raise exception 'mechanic verification and rating fields are server-managed';
+      end if;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.validate_repair_request_update()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  actor uuid := auth.uid();
+  mechanic_verified boolean;
+begin
+  if actor is null then
+    return new;
+  end if;
+
+  if new.motorist_id is distinct from old.motorist_id
+     or new.mechanic_id is distinct from old.mechanic_id
+     or new.vehicle_id is distinct from old.vehicle_id then
+    raise exception 'repair participants and vehicle cannot be reassigned';
+  end if;
+
+  if new.description is distinct from old.description
+     or new.symptom is distinct from old.symptom
+     or new.location_text is distinct from old.location_text
+     or new.latitude is distinct from old.latitude
+     or new.longitude is distinct from old.longitude
+     or new.preferred_time is distinct from old.preferred_time then
+    raise exception 'submitted repair details cannot be edited';
+  end if;
+
+  if new.status is not distinct from old.status then
+    return new;
+  end if;
+
+  if actor = old.motorist_id then
+    if not (
+      (old.status = 'requested' and new.status = 'cancelled')
+      or (old.status = 'quoted' and new.status = 'approved')
+      or (old.status = 'repair-complete' and new.status = 'paid')
+      or (old.status = 'paid' and new.status = 'completed')
+    ) then
+      raise exception 'motorist is not allowed to make this repair status transition';
+    end if;
+  elsif actor = old.mechanic_id then
+    select exists (
+      select 1
+      from public.mechanic_profiles mp
+      where mp.user_id = actor and mp.verified = true
+    ) into mechanic_verified;
+
+    if not mechanic_verified then
+      raise exception 'mechanic must be verified before updating repair status';
+    end if;
+
+    if not (
+      (old.status = 'requested' and new.status = 'accepted')
+      or (old.status = 'accepted' and new.status = 'en-route')
+      or (old.status = 'en-route' and new.status = 'arrived')
+      or (old.status = 'arrived' and new.status = 'inspected')
+      or (old.status = 'inspected' and new.status = 'quoted')
+      or (old.status = 'approved' and new.status = 'repairing')
+      or (old.status = 'repairing' and new.status = 'repair-complete')
+    ) then
+      raise exception 'mechanic is not allowed to make this repair status transition';
+    end if;
+  else
+    raise exception 'only repair participants may update repair status';
+  end if;
+
+  if new.status = 'inspected' and not exists (
+    select 1 from public.inspections i where i.request_id = new.id
+  ) then
+    raise exception 'inspection must exist before marking the request inspected';
+  end if;
+
+  if new.status = 'quoted' and not exists (
+    select 1 from public.repair_quotes q where q.request_id = new.id
+  ) then
+    raise exception 'quote must exist before marking the request quoted';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.log_repair_event()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
-  if old.status is distinct from new.status then
+  if tg_op = 'INSERT' then
+    insert into public.repair_events (request_id, actor_id, status)
+    values (new.id, new.motorist_id, new.status);
+  elsif old.status is distinct from new.status then
     insert into public.repair_events (request_id, actor_id, status)
     values (new.id, auth.uid(), new.status);
   end if;
+  return new;
+end;
+$$;
+
+create or replace function public.update_mechanic_rating()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.mechanic_profiles mp
+  set rating = aggregates.average_rating,
+      reviews_count = aggregates.review_count,
+      updated_at = now()
+  from (
+    select mechanic_id,
+           round(avg(rating)::numeric, 1) as average_rating,
+           count(*)::integer as review_count
+    from public.ratings
+    where mechanic_id = new.mechanic_id
+    group by mechanic_id
+  ) aggregates
+  where mp.user_id = aggregates.mechanic_id;
   return new;
 end;
 $$;
@@ -169,13 +316,25 @@ drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at before update on public.profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists profiles_protect_role on public.profiles;
+create trigger profiles_protect_role before update on public.profiles
+for each row execute function public.protect_profile_role();
+
 drop trigger if exists mechanic_profiles_set_updated_at on public.mechanic_profiles;
 create trigger mechanic_profiles_set_updated_at before update on public.mechanic_profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists mechanic_profiles_protect_system_fields on public.mechanic_profiles;
+create trigger mechanic_profiles_protect_system_fields before insert or update on public.mechanic_profiles
+for each row execute function public.protect_mechanic_system_fields();
+
 drop trigger if exists vehicles_set_updated_at on public.vehicles;
 create trigger vehicles_set_updated_at before update on public.vehicles
 for each row execute function public.set_updated_at();
+
+drop trigger if exists repair_requests_validate_update on public.repair_requests;
+create trigger repair_requests_validate_update before update on public.repair_requests
+for each row execute function public.validate_repair_request_update();
 
 drop trigger if exists repair_requests_set_updated_at on public.repair_requests;
 create trigger repair_requests_set_updated_at before update on public.repair_requests
@@ -189,9 +348,23 @@ drop trigger if exists repair_quotes_set_updated_at on public.repair_quotes;
 create trigger repair_quotes_set_updated_at before update on public.repair_quotes
 for each row execute function public.set_updated_at();
 
-drop trigger if exists repair_requests_log_status on public.repair_requests;
-create trigger repair_requests_log_status after update of status on public.repair_requests
-for each row execute function public.log_repair_status_change();
+drop trigger if exists repair_requests_log_event on public.repair_requests;
+create trigger repair_requests_log_event
+after insert or update of status on public.repair_requests
+for each row execute function public.log_repair_event();
+
+drop trigger if exists ratings_update_mechanic_rating on public.ratings;
+create trigger ratings_update_mechanic_rating
+after insert on public.ratings
+for each row execute function public.update_mechanic_rating();
+
+revoke all on function public.set_updated_at() from public, anon, authenticated;
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+revoke all on function public.protect_profile_role() from public, anon, authenticated;
+revoke all on function public.protect_mechanic_system_fields() from public, anon, authenticated;
+revoke all on function public.validate_repair_request_update() from public, anon, authenticated;
+revoke all on function public.log_repair_event() from public, anon, authenticated;
+revoke all on function public.update_mechanic_rating() from public, anon, authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.mechanic_profiles enable row level security;
@@ -201,6 +374,25 @@ alter table public.inspections enable row level security;
 alter table public.repair_quotes enable row level security;
 alter table public.ratings enable row level security;
 alter table public.repair_events enable row level security;
+
+grant usage on schema public to authenticated;
+revoke all on table public.profiles from anon;
+revoke all on table public.mechanic_profiles from anon;
+revoke all on table public.vehicles from anon;
+revoke all on table public.repair_requests from anon;
+revoke all on table public.inspections from anon;
+revoke all on table public.repair_quotes from anon;
+revoke all on table public.ratings from anon;
+revoke all on table public.repair_events from anon;
+
+grant select, update on table public.profiles to authenticated;
+grant select, insert, update on table public.mechanic_profiles to authenticated;
+grant select, insert, update, delete on table public.vehicles to authenticated;
+grant select, insert, update on table public.repair_requests to authenticated;
+grant select, insert, update on table public.inspections to authenticated;
+grant select, insert, update on table public.repair_quotes to authenticated;
+grant select, insert on table public.ratings to authenticated;
+grant select on table public.repair_events to authenticated;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -221,19 +413,43 @@ on public.mechanic_profiles for select
 to authenticated
 using (verified = true or (select auth.uid()) = user_id);
 
-drop policy if exists "mechanic_profiles_manage_own" on public.mechanic_profiles;
-create policy "mechanic_profiles_manage_own"
-on public.mechanic_profiles for all
+drop policy if exists "mechanic_profiles_insert_own" on public.mechanic_profiles;
+create policy "mechanic_profiles_insert_own"
+on public.mechanic_profiles for insert
+to authenticated
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "mechanic_profiles_update_own" on public.mechanic_profiles;
+create policy "mechanic_profiles_update_own"
+on public.mechanic_profiles for update
 to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
-drop policy if exists "vehicles_manage_own" on public.vehicles;
-create policy "vehicles_manage_own"
-on public.vehicles for all
+drop policy if exists "vehicles_select_own" on public.vehicles;
+create policy "vehicles_select_own"
+on public.vehicles for select
+to authenticated
+using ((select auth.uid()) = owner_id);
+
+drop policy if exists "vehicles_insert_own" on public.vehicles;
+create policy "vehicles_insert_own"
+on public.vehicles for insert
+to authenticated
+with check ((select auth.uid()) = owner_id);
+
+drop policy if exists "vehicles_update_own" on public.vehicles;
+create policy "vehicles_update_own"
+on public.vehicles for update
 to authenticated
 using ((select auth.uid()) = owner_id)
 with check ((select auth.uid()) = owner_id);
+
+drop policy if exists "vehicles_delete_own" on public.vehicles;
+create policy "vehicles_delete_own"
+on public.vehicles for delete
+to authenticated
+using ((select auth.uid()) = owner_id);
 
 drop policy if exists "repair_requests_participants_read" on public.repair_requests;
 create policy "repair_requests_participants_read"
@@ -245,7 +461,18 @@ drop policy if exists "repair_requests_motorist_insert" on public.repair_request
 create policy "repair_requests_motorist_insert"
 on public.repair_requests for insert
 to authenticated
-with check ((select auth.uid()) = motorist_id);
+with check (
+  (select auth.uid()) = motorist_id
+  and status = 'requested'
+  and exists (
+    select 1 from public.vehicles v
+    where v.id = repair_requests.vehicle_id and v.owner_id = (select auth.uid())
+  )
+  and exists (
+    select 1 from public.mechanic_profiles mp
+    where mp.user_id = repair_requests.mechanic_id and mp.verified = true
+  )
+);
 
 drop policy if exists "repair_requests_participants_update" on public.repair_requests;
 create policy "repair_requests_participants_update"
@@ -266,9 +493,23 @@ using (
   )
 );
 
-drop policy if exists "inspections_mechanic_manage" on public.inspections;
-create policy "inspections_mechanic_manage"
-on public.inspections for all
+drop policy if exists "inspections_mechanic_insert" on public.inspections;
+create policy "inspections_mechanic_insert"
+on public.inspections for insert
+to authenticated
+with check (
+  (select auth.uid()) = mechanic_id
+  and exists (
+    select 1 from public.repair_requests r
+    where r.id = inspections.request_id
+      and r.mechanic_id = (select auth.uid())
+      and r.status = 'arrived'
+  )
+);
+
+drop policy if exists "inspections_mechanic_update" on public.inspections;
+create policy "inspections_mechanic_update"
+on public.inspections for update
 to authenticated
 using ((select auth.uid()) = mechanic_id)
 with check (
@@ -291,9 +532,23 @@ using (
   )
 );
 
-drop policy if exists "repair_quotes_mechanic_manage" on public.repair_quotes;
-create policy "repair_quotes_mechanic_manage"
-on public.repair_quotes for all
+drop policy if exists "repair_quotes_mechanic_insert" on public.repair_quotes;
+create policy "repair_quotes_mechanic_insert"
+on public.repair_quotes for insert
+to authenticated
+with check (
+  (select auth.uid()) = mechanic_id
+  and exists (
+    select 1 from public.repair_requests r
+    where r.id = repair_quotes.request_id
+      and r.mechanic_id = (select auth.uid())
+      and r.status = 'inspected'
+  )
+);
+
+drop policy if exists "repair_quotes_mechanic_update" on public.repair_quotes;
+create policy "repair_quotes_mechanic_update"
+on public.repair_quotes for update
 to authenticated
 using ((select auth.uid()) = mechanic_id)
 with check (
@@ -314,7 +569,16 @@ drop policy if exists "ratings_motorist_insert" on public.ratings;
 create policy "ratings_motorist_insert"
 on public.ratings for insert
 to authenticated
-with check ((select auth.uid()) = motorist_id);
+with check (
+  (select auth.uid()) = motorist_id
+  and exists (
+    select 1 from public.repair_requests r
+    where r.id = ratings.request_id
+      and r.motorist_id = ratings.motorist_id
+      and r.mechanic_id = ratings.mechanic_id
+      and r.status in ('paid', 'completed')
+  )
+);
 
 drop policy if exists "repair_events_participants_read" on public.repair_events;
 create policy "repair_events_participants_read"
@@ -328,12 +592,21 @@ using (
   )
 );
 
+alter table public.mechanic_profiles replica identity full;
 alter table public.repair_requests replica identity full;
 alter table public.inspections replica identity full;
 alter table public.repair_quotes replica identity full;
+alter table public.ratings replica identity full;
 
 do $$
 begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'mechanic_profiles'
+  ) then
+    alter publication supabase_realtime add table public.mechanic_profiles;
+  end if;
+
   if not exists (
     select 1 from pg_publication_tables
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'repair_requests'
@@ -353,6 +626,13 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'repair_quotes'
   ) then
     alter publication supabase_realtime add table public.repair_quotes;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'ratings'
+  ) then
+    alter publication supabase_realtime add table public.ratings;
   end if;
 end
 $$;
