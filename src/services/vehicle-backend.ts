@@ -32,6 +32,7 @@ export async function getMotoristVehicles(userId: string) {
   return table
     .select("*")
     .eq("owner_id", userId)
+    .is("archived_at", null)
     .order("updated_at", { ascending: false });
 }
 
@@ -50,6 +51,7 @@ export async function saveMotoristVehicle(
     power_source: vehicle.powerSource,
     fuel_type: vehicle.powerSource === "Electric" ? null : vehicle.fuelType,
     transmission: vehicle.transmission,
+    archived_at: null,
   };
 
   if (vehicleId) {
@@ -62,4 +64,37 @@ export async function saveMotoristVehicle(
   }
 
   return table.insert(payload).select().single();
+}
+
+export async function deleteMotoristVehicle(userId: string, vehicleId: string) {
+  const client = requireSupabase();
+  const history = await (client.from("repair_requests") as any)
+    .select("id", { count: "exact", head: true })
+    .eq("vehicle_id", vehicleId)
+    .eq("motorist_id", userId);
+
+  if (history.error) {
+    return { data: null, error: history.error, archived: false };
+  }
+
+  const table = client.from("vehicles") as any;
+  if ((history.count ?? 0) > 0) {
+    const result = await table
+      .update({ archived_at: new Date().toISOString() })
+      .eq("id", vehicleId)
+      .eq("owner_id", userId)
+      .select("id")
+      .single();
+
+    return { ...result, archived: true };
+  }
+
+  const result = await table
+    .delete()
+    .eq("id", vehicleId)
+    .eq("owner_id", userId)
+    .select("id")
+    .single();
+
+  return { ...result, archived: false };
 }
