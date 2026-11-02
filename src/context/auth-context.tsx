@@ -1,4 +1,5 @@
 import type { Session, User } from "@supabase/supabase-js";
+import * as Linking from "expo-linking";
 import {
   createContext,
   type ReactNode,
@@ -145,10 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = supabase;
     if (!client) throw new Error("Live backend is not configured on this device.");
 
+    const emailRedirectTo = Linking.createURL("login");
+
     const { data, error } = await client.auth.signUp({
       email: input.email.trim(),
       password: input.password,
       options: {
+        emailRedirectTo,
         data: {
           full_name: input.fullName.trim(),
           phone: input.phone.trim(),
