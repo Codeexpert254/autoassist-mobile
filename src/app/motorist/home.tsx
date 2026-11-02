@@ -1,10 +1,32 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useDemoApp } from "@/context/demo-app-context";
 import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
+
+const quickServices = [
+  {
+    label: "MECHANIC",
+    helper: "Verified repair help",
+    route: "/motorist/mechanic-results",
+    icon: { ios: "wrench.fill", android: "build", web: "build" },
+  },
+  {
+    label: "PARTS",
+    helper: "Compatible spare parts",
+    route: "/motorist/spare-parts",
+    icon: { ios: "shippingbox.fill", android: "inventory_2", web: "inventory_2" },
+  },
+  {
+    label: "TOWING",
+    helper: "Roadside recovery",
+    route: "/motorist/request-towing",
+    icon: { ios: "car.fill", android: "local_shipping", web: "local_shipping" },
+  },
+] as const;
 
 export default function Home() {
   const router = useRouter();
@@ -43,11 +65,23 @@ export default function Home() {
           <Text style={styles.primaryButtonText}>{hasActiveRepair ? "View active repair" : "Describe a car problem"}</Text>
         </Pressable>
 
-        <Text style={styles.quickServices}>Quick services</Text>
+        <View style={styles.quickServicesHeading}>
+          <View>
+            <Text style={styles.quickServices}>Quick services</Text>
+            <Text style={styles.quickServicesHint}>Get the help you need in a few taps.</Text>
+          </View>
+        </View>
+
         <View style={styles.servicesContainer}>
-          <ServiceCard label="MECHANIC" icon={require("../../../assets/images/mechanicicon.png")} onPress={() => router.push("/motorist/mechanic-results")} />
-          <ServiceCard label="PARTS" icon={require("../../../assets/images/partsicon.png")} onPress={() => router.push("/motorist/spare-parts")} />
-          <ServiceCard label="TOWING" icon={require("../../../assets/images/towingicon.png")} onPress={() => router.push("/motorist/request-towing")} />
+          {quickServices.map((service) => (
+            <ServiceCard
+              key={service.label}
+              label={service.label}
+              helper={service.helper}
+              icon={service.icon}
+              onPress={() => router.push(service.route)}
+            />
+          ))}
         </View>
 
         <Text style={styles.recentActivity}>{hasActiveRepair ? "Active repair" : "Recent activity"}</Text>
@@ -68,13 +102,24 @@ export default function Home() {
   );
 }
 
-function ServiceCard({ label, icon, onPress }: { label: string; icon: number; onPress: () => void }) {
+function ServiceCard({
+  label,
+  helper,
+  icon,
+  onPress,
+}: {
+  label: string;
+  helper: string;
+  icon: { readonly ios: string; readonly android: string; readonly web: string };
+  onPress: () => void;
+}) {
   return (
-    <Pressable style={styles.serviceCard} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.serviceCard, pressed && styles.serviceCardPressed]} onPress={onPress}>
       <View style={styles.iconHolder}>
-        <Image style={styles.serviceIcon} source={icon} />
+        <SymbolView name={icon as never} size={25} tintColor="#1857A6" />
       </View>
       <Text style={styles.serviceText}>{label}</Text>
+      <Text style={styles.serviceHelper} numberOfLines={2}>{helper}</Text>
     </Pressable>
   );
 }
@@ -94,23 +139,47 @@ const styles = StyleSheet.create({
   subTitle: { color: "#667085", fontSize: 13, fontFamily: "Inter_400Regular" },
   previewLink: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   title: { color: "#102A43", fontSize: 23, fontFamily: "Inter_600SemiBold", marginTop: 4, marginBottom: 18 },
-  vehicleContainer: { backgroundColor: "#123D76", minHeight: 105, padding: 16, gap: 10, borderRadius: 14, marginBottom: 35 },
+  vehicleContainer: { backgroundColor: "#123D76", minHeight: 105, padding: 16, gap: 10, borderRadius: 14, marginBottom: 32 },
   vehicleInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   vehicle: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   vehicleModel: { color: "#FFFFFF", fontSize: 17, fontFamily: "Inter_600SemiBold" },
   vehicleReg: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_400Regular" },
   vehicleArrow: { width: 10, height: 10, transform: [{ scaleX: -1 }], tintColor: "#FFFFFF" },
   helpTitle: { color: "#102A43", fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 14 },
-  primaryButton: { height: 48, borderRadius: 12, backgroundColor: "#1857A6", justifyContent: "center", marginBottom: 28 },
+  primaryButton: { height: 48, borderRadius: 12, backgroundColor: "#1857A6", justifyContent: "center", marginBottom: 26 },
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  quickServicesHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
   quickServices: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  servicesContainer: { flexDirection: "row", gap: 10, marginTop: 16 },
-  serviceCard: { flex: 1, minHeight: 92, borderRadius: 14, backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderWidth: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  iconHolder: { width: 42, height: 32, backgroundColor: "#EAF2FD", borderColor: "#D0D5DD", alignItems: "center", justifyContent: "center", borderWidth: 1, borderRadius: 9 },
-  serviceIcon: { height: 24, width: 24 },
-  serviceText: { color: "#344054", fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  recentActivity: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 38, marginBottom: 16 },
-  activityContainer: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderWidth: 1, minHeight: 105, borderRadius: 14, paddingHorizontal: 16, gap: 6, justifyContent: "center" },
+  quickServicesHint: { color: "#667085", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
+  servicesContainer: { flexDirection: "row", gap: 10, marginTop: 14 },
+  serviceCard: {
+    flex: 1,
+    minHeight: 124,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E4E7EC",
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 13,
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  serviceCardPressed: { backgroundColor: "#F7FAFE", transform: [{ scale: 0.98 }] },
+  iconHolder: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#EAF2FD",
+    borderColor: "#D5E4F7",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 15,
+    marginBottom: 10,
+  },
+  serviceText: { color: "#102A43", fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  serviceHelper: { color: "#667085", fontSize: 9, lineHeight: 13, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
+  recentActivity: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold", marginTop: 30, marginBottom: 14 },
+  activityContainer: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderWidth: 1, minHeight: 100, borderRadius: 14, paddingHorizontal: 16, gap: 6, justifyContent: "center" },
   activity: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular" },
   activityDetails: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
