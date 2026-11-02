@@ -3,15 +3,28 @@ import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 
 export default function Profile() {
   const router = useRouter();
-  const { state, logout } = useDemoApp();
+  const { backendEnabled, user, profile, signOut } = useAuth();
+  const { state, logout: demoLogout } = useDemoApp();
 
-  const handleLogout = () => {
-    logout();
-    router.replace("/login");
+  const displayName = profile?.full_name || state.user.name;
+  const displayPhone = profile?.phone || state.user.phone;
+  const displayEmail = user?.email || state.user.email;
+  const displayRole = profile?.role === "mechanic" ? "Mechanic" : "Motorist";
+
+  const handleLogout = async () => {
+    try {
+      if (backendEnabled) {
+        await signOut();
+      }
+    } finally {
+      demoLogout();
+      router.replace("/login");
+    }
   };
 
   return (
@@ -23,16 +36,26 @@ export default function Profile() {
           </Pressable>
           <Text style={styles.title}>Profile & settings</Text>
         </View>
-        <Text style={styles.subTitle}>Manage identity, contact, security and role information.</Text>
+        <Text style={styles.subTitle}>Manage identity, contact, security and account information.</Text>
 
-        <SettingCard title="Personal information" subtitle={state.user.name} onPress={() => {}} />
-        <SettingCard title="Wallet & transactions" subtitle="View demo payments and payouts" onPress={() => router.push("/wallet")} />
-        <SettingCard title="Payment methods" subtitle={state.paymentMethod} onPress={() => router.push("/shared/payment-methods")} />
-        <SettingCard title="Phone & email" subtitle={`${state.user.phone} • ${state.user.email}`} onPress={() => {}} />
-        <SettingCard title="Security" subtitle="Password & device access" onPress={() => router.push("/shared/security")} />
-        <SettingCard title="Help & support" subtitle="FAQs, report a problem" onPress={() => router.push("/shared/help-center")} />
+        <View style={styles.identityCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{displayName.trim().charAt(0).toUpperCase() || "A"}</Text>
+          </View>
+          <View style={styles.identityCopy}>
+            <Text style={styles.identityName}>{displayName}</Text>
+            <Text style={styles.identityMeta}>{displayRole} • {backendEnabled ? "Live account" : "Developer Preview"}</Text>
+          </View>
+        </View>
 
-        <Pressable style={styles.logoutButton} onPress={handleLogout}>
+        <SettingCard title="Personal information" subtitle={displayName} onPress={() => {}} />
+        <SettingCard title="Wallet & transactions" subtitle="View payments and service transactions" onPress={() => router.push("/wallet")} />
+        <SettingCard title="Payment methods" subtitle={state.paymentMethod} onPress={() => router.push("/payment-methods")} />
+        <SettingCard title="Phone & email" subtitle={`${displayPhone} • ${displayEmail}`} onPress={() => {}} />
+        <SettingCard title="Security" subtitle="Password & device access" onPress={() => router.push("/security")} />
+        <SettingCard title="Help & support" subtitle="FAQs, report a problem" onPress={() => router.push("/help-center")} />
+
+        <Pressable style={styles.logoutButton} onPress={() => void handleLogout()}>
           <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
       </SafeAreaView>
@@ -58,8 +81,14 @@ const styles = StyleSheet.create({
   header: { marginTop: 20, gap: 12, flexDirection: "row", alignItems: "center", marginBottom: 16 },
   backIcon: { width: 14, height: 14 },
   title: { color: "#102A43", fontSize: 19, fontFamily: "Inter_600SemiBold" },
-  subTitle: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 24 },
-  card: { minHeight: 72, borderRadius: 12, borderWidth: 1, borderColor: "#E4E7EC", backgroundColor: "#FFFFFF", paddingHorizontal: 14, flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  subTitle: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 18 },
+  identityCard: { minHeight: 82, borderRadius: 14, backgroundColor: "#123D76", padding: 14, flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#1857A6", fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  identityCopy: { flex: 1 },
+  identityName: { color: "#FFFFFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  identityMeta: { color: "#DCE9F8", fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 4 },
+  card: { minHeight: 68, borderRadius: 12, borderWidth: 1, borderColor: "#E4E7EC", backgroundColor: "#FFFFFF", paddingHorizontal: 14, flexDirection: "row", alignItems: "center", marginBottom: 8 },
   cardCopy: { flex: 1, gap: 4 },
   cardTitle: { color: "#102A43", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   cardSubtitle: { color: "#667085", fontSize: 11, fontFamily: "Inter_400Regular" },
