@@ -62,32 +62,87 @@ export async function signOut() {
   return requireSupabase().auth.signOut();
 }
 
-export async function upsertProfile(input: {
-  userId: string;
-  fullName: string;
-  phone: string;
-  role: AppRole;
-}) {
+export async function getOwnProfile(userId: string) {
+  return requireSupabase().from("profiles").select("*").eq("id", userId).single();
+}
+
+export async function updateOwnProfile(userId: string, input: { fullName: string; phone: string }) {
   return requireSupabase()
     .from("profiles")
-    .upsert({
-      id: input.userId,
-      full_name: input.fullName,
-      phone: input.phone,
-      role: input.role,
+    .update({
+      full_name: input.fullName.trim(),
+      phone: input.phone.trim(),
+    })
+    .eq("id", userId)
+    .select()
+    .single();
+}
+
+export async function getMechanicProfile(userId: string) {
+  return requireSupabase()
+    .from("mechanic_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+}
+
+export async function saveMechanicProfile(
+  userId: string,
+  input: { garageName: string; location: string; services: string[] },
+) {
+  const client = requireSupabase();
+  const existing = await getMechanicProfile(userId);
+  if (existing.error) throw existing.error;
+
+  if (existing.data) {
+    return client
+      .from("mechanic_profiles")
+      .update({
+        garage_name: input.garageName.trim(),
+        location: input.location.trim(),
+        services: input.services,
+      })
+      .eq("user_id", userId)
+      .select()
+      .single();
+  }
+
+  return client
+    .from("mechanic_profiles")
+    .insert({
+      user_id: userId,
+      garage_name: input.garageName.trim(),
+      location: input.location.trim(),
+      services: input.services,
     })
     .select()
     .single();
+}
+
+export async function getVerifiedMechanics() {
+  return requireSupabase()
+    .from("mechanic_profiles")
+    .select("*")
+    .eq("verified", true)
+    .order("rating", { ascending: false });
+}
+
+export async function getOwnedVehicles(userId: string) {
+  return requireSupabase()
+    .from("vehicles")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("updated_at", { ascending: false });
 }
 
 export async function saveVehicle(userId: string, vehicle: VehicleInput, vehicleId?: string) {
   const client = requireSupabase();
   const payload = {
     owner_id: userId,
-    make: vehicle.make,
-    model: vehicle.model,
+    make: vehicle.make.trim(),
+    model: vehicle.model.trim(),
     year: vehicle.year,
-    registration: vehicle.registration,
+    registration: vehicle.registration.trim().toUpperCase(),
     power_source: vehicle.powerSource,
     transmission: vehicle.transmission,
   };
@@ -112,12 +167,12 @@ export async function createRepairRequest(motoristId: string, input: RepairReque
       motorist_id: motoristId,
       mechanic_id: input.mechanicId,
       vehicle_id: input.vehicleId,
-      description: input.description,
+      description: input.description.trim(),
       symptom: input.symptom,
-      location_text: input.locationText,
+      location_text: input.locationText.trim(),
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      preferred_time: input.preferredTime,
+      preferred_time: input.preferredTime.trim() || "As soon as possible",
       status: "requested",
     })
     .select()
@@ -143,7 +198,7 @@ export async function getMotoristRepairs(motoristId: string) {
 export async function getMechanicRepairs(mechanicId: string) {
   return requireSupabase()
     .from("repair_requests")
-    .select("*, vehicles(*), repair_quotes(*)")
+    .select("*, vehicles(*), inspections(*), repair_quotes(*), ratings(*)")
     .eq("mechanic_id", mechanicId)
     .order("created_at", { ascending: false });
 }
@@ -165,21 +220,29 @@ export async function saveInspection(input: {
   brakeFluid: string;
   notes: string;
 }) {
-  return requireSupabase()
+  const client = requireSupabase();
+  const { data: existing, error: lookupError } = await client
     .from("inspections")
-    .upsert(
-      {
-        request_id: input.requestId,
-        mechanic_id: input.mechanicId,
-        brake_pads: input.brakePads,
-        brake_discs: input.brakeDiscs,
-        brake_fluid: input.brakeFluid,
-        notes: input.notes,
-      },
-      { onConflict: "request_id" },
-    )
-    .select()
-    .single();
+    .select("id")
+    .eq("request_id", input.requestId)
+    .maybeSingle();
+
+  if (lookupError) throw lookupError;
+
+  const payload = {
+    request_id: input.requestId,
+    mechanic_id: input.mechanicId,
+    brake_pads: input.brakePads,
+    brake_discs: input.brakeDiscs,
+    brake_fluid: input.brakeFluid,
+    notes: input.notes.trim(),
+  };
+
+  if (existing) {
+    return client.from("inspections").update(payload).eq("id", existing.id).select().single();
+  }
+
+  return client.from("inspections").insert(payload).select().single();
 }
 
 export async function saveRepairQuote(input: {
@@ -191,22 +254,30 @@ export async function saveRepairQuote(input: {
   partAmount: number;
   serviceFee: number;
 }) {
-  return requireSupabase()
+  const client = requireSupabase();
+  const { data: existing, error: lookupError } = await client
     .from("repair_quotes")
-    .upsert(
-      {
-        request_id: input.requestId,
-        mechanic_id: input.mechanicId,
-        labour_description: input.labourDescription,
-        labour_amount: input.labourAmount,
-        part_description: input.partDescription,
-        part_amount: input.partAmount,
-        service_fee: input.serviceFee,
-      },
-      { onConflict: "request_id" },
-    )
-    .select()
-    .single();
+    .select("id")
+    .eq("request_id", input.requestId)
+    .maybeSingle();
+
+  if (lookupError) throw lookupError;
+
+  const payload = {
+    request_id: input.requestId,
+    mechanic_id: input.mechanicId,
+    labour_description: input.labourDescription.trim(),
+    labour_amount: input.labourAmount,
+    part_description: input.partDescription.trim(),
+    part_amount: input.partAmount,
+    service_fee: input.serviceFee,
+  };
+
+  if (existing) {
+    return client.from("repair_quotes").update(payload).eq("id", existing.id).select().single();
+  }
+
+  return client.from("repair_quotes").insert(payload).select().single();
 }
 
 export async function submitRating(input: {
@@ -218,16 +289,13 @@ export async function submitRating(input: {
 }) {
   return requireSupabase()
     .from("ratings")
-    .upsert(
-      {
-        request_id: input.requestId,
-        motorist_id: input.motoristId,
-        mechanic_id: input.mechanicId,
-        rating: input.rating,
-        review: input.review ?? null,
-      },
-      { onConflict: "request_id" },
-    )
+    .insert({
+      request_id: input.requestId,
+      motorist_id: input.motoristId,
+      mechanic_id: input.mechanicId,
+      rating: input.rating,
+      review: input.review?.trim() || null,
+    })
     .select()
     .single();
 }
@@ -238,32 +306,22 @@ export function subscribeToRepair(requestId: string, onChange: () => void) {
     .channel(`repair:${requestId}`)
     .on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "repair_requests",
-        filter: `id=eq.${requestId}`,
-      },
+      { event: "*", schema: "public", table: "repair_requests", filter: `id=eq.${requestId}` },
       onChange,
     )
     .on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "inspections",
-        filter: `request_id=eq.${requestId}`,
-      },
+      { event: "*", schema: "public", table: "inspections", filter: `request_id=eq.${requestId}` },
       onChange,
     )
     .on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "repair_quotes",
-        filter: `request_id=eq.${requestId}`,
-      },
+      { event: "*", schema: "public", table: "repair_quotes", filter: `request_id=eq.${requestId}` },
+      onChange,
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "ratings", filter: `request_id=eq.${requestId}` },
       onChange,
     )
     .subscribe();
