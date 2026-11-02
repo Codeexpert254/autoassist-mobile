@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { type AccountRole, useAuth } from "@/context/auth-context";
+import { type AccountRole, type MechanicProviderType, useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 
 const accountRoles: AccountRole[] = ["motorist", "mechanic", "partsdealer", "towing", "rider"];
@@ -17,7 +17,6 @@ const roleLabels: Record<AccountRole, string> = {
 };
 
 const providerNotes: Partial<Record<AccountRole, string>> = {
-  mechanic: "After login, you’ll complete your mechanic profile and submit verification details before receiving jobs.",
   partsdealer: "After login, you’ll complete your store profile and verification before fulfilling live orders.",
   towing: "After login, you’ll complete your provider profile and verification before receiving towing requests.",
   rider: "After login, you’ll complete your rider profile and verification before accepting delivery jobs.",
@@ -27,11 +26,20 @@ function isAccountRole(value: string | undefined): value is AccountRole {
   return Boolean(value && accountRoles.includes(value as AccountRole));
 }
 
+function isMechanicProviderType(value: string | undefined): value is MechanicProviderType {
+  return value === "individual" || value === "garage";
+}
+
 export default function Register() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ role?: string }>();
+  const params = useLocalSearchParams<{ role?: string; providerType?: string }>();
   const requestedRole = Array.isArray(params.role) ? params.role[0] : params.role;
+  const requestedProviderType = Array.isArray(params.providerType) ? params.providerType[0] : params.providerType;
   const role: AccountRole = isAccountRole(requestedRole) ? requestedRole : "motorist";
+  const providerType: MechanicProviderType | undefined =
+    role === "mechanic" && isMechanicProviderType(requestedProviderType)
+      ? requestedProviderType
+      : undefined;
 
   const { backendEnabled, signOut, signUp } = useAuth();
   const { register: demoRegister } = useDemoApp();
@@ -49,13 +57,18 @@ export default function Register() {
   const phoneIsValid = /^(?:\+254|0)?[17]\d{8}$/.test(compactPhone);
   const passwordIsLongEnough = password.length >= 8;
   const passwordsMatch = password === confirmPassword;
+  const mechanicTypeIsValid = role !== "mechanic" || Boolean(providerType);
 
   const formIsValid =
     fullname.trim() !== "" &&
     emailIsValid &&
     phoneIsValid &&
     passwordIsLongEnough &&
-    passwordsMatch;
+    passwordsMatch &&
+    mechanicTypeIsValid;
+
+  const mechanicLabel = providerType === "garage" ? "Garage / business" : "Individual mechanic";
+  const accountTitle = role === "mechanic" ? mechanicLabel : roleLabels[role];
 
   const goToLogin = (requiresEmailConfirmation: boolean) => {
     router.replace({
@@ -89,6 +102,7 @@ export default function Register() {
         phone: phoneNumber,
         password,
         role,
+        providerType,
       });
 
       if (!result.requiresEmailConfirmation) {
@@ -113,18 +127,30 @@ export default function Register() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
-              <Text style={styles.title}>Create your {roleLabels[role]} account</Text>
+              <Text style={styles.title}>Create your {accountTitle} account</Text>
               <Text style={styles.subTitle}>A few details and your account is ready.</Text>
             </View>
-            <Pressable onPress={() => router.replace("/roleselection")}>
-              <Text style={styles.changeRole}>Change role</Text>
+            <Pressable onPress={() => router.replace(role === "mechanic" ? "/mechanic/account-type" : "/roleselection")}>
+              <Text style={styles.changeRole}>{role === "mechanic" ? "Change type" : "Change role"}</Text>
             </Pressable>
           </View>
 
           <View style={styles.roleSummary}>
             <Text style={styles.roleSummaryLabel}>ACCOUNT TYPE</Text>
-            <Text style={styles.roleSummaryValue}>{roleLabels[role]}</Text>
+            <Text style={styles.roleSummaryValue}>
+              {role === "mechanic" ? `Mechanic · ${providerType === "garage" ? "Garage" : "Individual"}` : roleLabels[role]}
+            </Text>
           </View>
+
+          {role === "mechanic" && !providerType ? (
+            <View style={styles.missingTypeCard}>
+              <Text style={styles.missingTypeTitle}>Choose a mechanic account type first</Text>
+              <Text style={styles.missingTypeText}>Select Individual mechanic or Garage / business before creating this account.</Text>
+              <Pressable onPress={() => router.replace("/mechanic/account-type")}>
+                <Text style={styles.missingTypeLink}>Choose mechanic type</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <Field label="Full name" value={fullname} onChangeText={setFullName} placeholder="Abraham Masai" />
           <Field
@@ -178,7 +204,16 @@ export default function Register() {
                     : "Use at least 8 characters."}
           </Text>
 
-          {providerNotes[role] ? (
+          {role === "mechanic" && providerType ? (
+            <View style={styles.roleNote}>
+              <Text style={styles.roleNoteTitle}>Verification after login</Text>
+              <Text style={styles.roleNoteText}>
+                {providerType === "individual"
+                  ? "Your mechanic profile will be verified using your National ID before you receive live repair jobs."
+                  : "Your garage/business profile will be verified using a valid business permit before it receives live repair jobs."}
+              </Text>
+            </View>
+          ) : providerNotes[role] ? (
             <View style={styles.roleNote}>
               <Text style={styles.roleNoteTitle}>What happens after login?</Text>
               <Text style={styles.roleNoteText}>{providerNotes[role]}</Text>
@@ -195,7 +230,7 @@ export default function Register() {
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.createAccountText}>Create account</Text>}
           </Pressable>
 
-          <Pressable onPress={() => router.replace("/login")}>
+          <Pressable onPress={() => router.replace({ pathname: "/login", params: { role } })}>
             <Text style={styles.loginText}>
               Already have an account? <Text style={styles.login}>Log in</Text>
             </Text>
@@ -237,6 +272,10 @@ const styles = StyleSheet.create({
   roleSummary: { borderRadius: 12, backgroundColor: "#EAF2FD", borderWidth: 1, borderColor: "#D5E4F7", paddingHorizontal: 14, paddingVertical: 11, marginBottom: 22 },
   roleSummaryLabel: { color: "#667085", fontSize: 9, letterSpacing: 0.7, fontFamily: "Inter_600SemiBold" },
   roleSummaryValue: { color: "#1857A6", fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 3 },
+  missingTypeCard: { backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F5D48A", borderRadius: 12, padding: 12, marginBottom: 18 },
+  missingTypeTitle: { color: "#8A5200", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  missingTypeText: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 4 },
+  missingTypeLink: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 8 },
   fieldContainer: { marginBottom: 16 },
   lastField: { marginBottom: 8 },
   fieldTitle: { color: "#344054", fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 5 },
