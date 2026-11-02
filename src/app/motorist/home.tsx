@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
+import { normalizePowerSource } from "@/services/vehicle-backend";
 
 const quickServices = [
   {
@@ -37,7 +38,25 @@ export default function Home() {
   const displayName = profile?.full_name || demoState.user.name;
   const firstName = displayName.split(" ")[0] || "Motorist";
   const vehicleName = `${state.vehicle.make} ${state.vehicle.model}`.trim();
+  const hasVehicle = state.vehicleSaved;
   const hasActiveRepair = !["idle", "cancelled", "completed"].includes(state.status);
+  const vehiclePowerSource = normalizePowerSource(state.vehicle.powerSource);
+
+  const openVehicle = () => {
+    if (hasVehicle) {
+      router.push("/motorist/vehicle-details");
+      return;
+    }
+    router.push({ pathname: "/motorist/addavehicle", params: { mode: "add" } });
+  };
+
+  const openProblemFlow = () => {
+    if (!hasVehicle) {
+      router.push({ pathname: "/motorist/addavehicle", params: { mode: "add" } });
+      return;
+    }
+    router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/describe-problem");
+  };
 
   return (
     <View style={styles.homeContainer}>
@@ -52,22 +71,28 @@ export default function Home() {
         </View>
         <Text style={styles.title}>{firstName}</Text>
 
-        <Pressable style={styles.vehicleContainer} onPress={() => router.push("/motorist/vehicle-details")}>
-          <Text style={styles.vehicle}>MY VEHICLE</Text>
+        <Pressable style={styles.vehicleContainer} onPress={openVehicle}>
+          <Text style={styles.vehicle}>{hasVehicle ? "MY VEHICLE" : "ADD A VEHICLE"}</Text>
           <View style={styles.vehicleInfo}>
-            <Text style={styles.vehicleModel}>{vehicleName}</Text>
+            <Text style={styles.vehicleModel}>{hasVehicle ? vehicleName : "Set up your vehicle"}</Text>
             <Image source={require("../../../assets/images/left-arrow.png")} style={styles.vehicleArrow} />
           </View>
-          <Text style={styles.vehicleReg}>{state.vehicle.year} • {state.vehicle.registration} • {state.vehicle.powerSource}</Text>
+          <Text style={styles.vehicleReg}>
+            {hasVehicle
+              ? `${state.vehicle.year} • ${state.vehicle.registration} • ${vehiclePowerSource}`
+              : "Add vehicle details for better mechanic and parts matching"}
+          </Text>
         </Pressable>
 
         <Text style={styles.helpTitle}>What do you need help with?</Text>
 
         <Pressable
           style={styles.primaryButton}
-          onPress={() => router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/describe-problem")}
+          onPress={openProblemFlow}
         >
-          <Text style={styles.primaryButtonText}>{hasActiveRepair ? "View active repair" : "Describe a car problem"}</Text>
+          <Text style={styles.primaryButtonText}>
+            {!hasVehicle ? "Add a vehicle to continue" : hasActiveRepair ? "View active repair" : "Describe a car problem"}
+          </Text>
         </Pressable>
 
         <View style={styles.quickServicesHeading}>
@@ -148,7 +173,7 @@ const styles = StyleSheet.create({
   vehicleInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   vehicle: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   vehicleModel: { color: "#FFFFFF", fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  vehicleReg: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_400Regular" },
+  vehicleReg: { color: "#FFFFFF", fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular" },
   vehicleArrow: { width: 10, height: 10, transform: [{ scaleX: -1 }], tintColor: "#FFFFFF" },
   helpTitle: { color: "#102A43", fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 14 },
   primaryButton: { height: 48, borderRadius: 12, backgroundColor: "#1857A6", justifyContent: "center", marginBottom: 26 },
