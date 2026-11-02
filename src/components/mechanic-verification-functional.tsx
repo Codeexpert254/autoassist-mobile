@@ -1,16 +1,31 @@
-import { SymbolView } from "expo-symbols";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useRepairFlow } from "@/context/repair-flow-context";
 import {
   getMechanicVerification,
+  saveMechanicVerificationDraft,
   submitMechanicVerification,
+  uploadMechanicVerificationImage,
   type MechanicVerificationChecklist,
+  type MechanicVerificationEvidence,
+  type VerificationImageKind,
 } from "@/services/mechanic-verification-backend";
+
+type EvidenceKey = "nationalId" | "businessPermit" | "certificates" | "profilePhoto";
+type VerificationStatus = "not-submitted" | "draft" | "pending" | "approved" | "rejected";
+
+const emptyEvidence: MechanicVerificationEvidence = {
+  nationalIdPath: null,
+  businessPermitPath: null,
+  certificatePaths: [],
+  profilePhotoPath: null,
+};
 
 export default function MechanicVerificationFunctional() {
   const router = useRouter();
@@ -24,11 +39,13 @@ export default function MechanicVerificationFunctional() {
     certificates: state.verificationItems.certificates,
     profilePhoto: state.verificationItems.profilePhoto,
   });
-  const [status, setStatus] = useState<"not-submitted" | "pending" | "approved" | "rejected">(
+  const [evidence, setEvidence] = useState<MechanicVerificationEvidence>(emptyEvidence);
+  const [status, setStatus] = useState<VerificationStatus>(
     state.mechanicProfile.verified ? "approved" : "not-submitted",
   );
   const [reviewNote, setReviewNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(backendEnabled);
+  const [uploadingKey, setUploadingKey] = useState<EvidenceKey | null>(null);
   const [error, setError] = useState("");
 
   const loadStatus = async () => {
@@ -41,15 +58,12 @@ export default function MechanicVerificationFunctional() {
     setError("");
     try {
       await refreshBackend();
-      if (state.mechanicProfile.verified) {
-        setStatus("approved");
-        return;
-      }
 
       const { data, error: requestError } = await getMechanicVerification(user.id);
       if (requestError) throw requestError;
       if (!data) {
-        setStatus("not-submitted");
+        setStatus(state.mechanicProfile.verified ? "approved" : "not-submitted");
+        setEvidence(emptyEvidence);
         return;
       }
 
@@ -59,8 +73,22 @@ export default function MechanicVerificationFunctional() {
         certificates: data.certificates_confirmed,
         profilePhoto: data.profile_photo_confirmed,
       });
+      setEvidence({
+        nationalIdPath: data.national_id_path,
+        businessPermitPath: data.business_permit_path,
+        certificatePaths: data.certificate_paths ?? [],
+        profilePhotoPath: data.profile_photo_path,
+      });
       setReviewNote(data.review_note);
-      setStatus(data.status === "approved" ? "approved" : data.status === "rejected" ? "rejected" : "pending");
+      setStatus(
+        data.status === "approved"
+          ? "approved"
+          : data.status === "rejected"
+            ? "rejected"
+            : data.status === "pending"
+              ? "pending"
+              : "draft",
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to load verification status.");
     } finally {
@@ -72,22 +100,162 @@ export default function MechanicVerificationFunctional() {
     void loadStatus();
   }, [backendEnabled, user?.id]);
 
-  const toggle = (key: keyof MechanicVerificationChecklist) => {
-    if (status === "pending" || status === "approved") return;
-    setChecklist((current) => ({ ...current, [key]: !current[key] }));
+  const uploadKindFor = (key: EvidenceKey): VerificationImageKind => {
+    switch (key) {
+      case "nationalId":
+        return "national-id";
+      case "businessPermit":
+        return "business-permit";
+      case "certificates":
+        return "certificate";
+      default:
+        return "profile-photo";
+    }
+  };
+
+  const persistImages = async (key: EvidenceKey, assets: ImagePicker.ImagePickerAsset[]) => {
+    if (!assets.length || uploadingKey) return;
+
+    if (!backendEnabled || !user) {
+      setChecklist((current) => ({ ...current, [key]: true }));
+      setStatus("draft");
+      return;
+    }
+
+    setUploadingKey(key);
+    setError("");
+
+    try {
+      const nextEvidence: MechanicVerificationEvidence = {
+        ...evidence,
+        certificatePaths: [...evidence.certificatePaths],
+      };
+
+      for (const asset of assets) {
+        if (!asset.uri) continue;
+        const { data, error: uploadError } = await uploadMechanicVerificationImage({
+          userId: user.id,
+          kind: uploadKindFor(key),
+          uri: asset.uri,
+          mimeType: asset.mimeType,
+        });
+        if (uploadError) throw uploadError;
+
+        if (key === "nationalId") nextEvidence.nationalIdPath = data.path;
+        if (key === "businessPermit") nextEvidence.businessPermitPath = data.path;
+        if (key === "profilePhoto") nextEvidence.profilePhotoPath = data.path;
+        if (key === "certificates" && !nextEvidence.certificatePaths.includes(data.path)) {
+          nextEvidence.certificatePaths.push(data.path);
+        }
+      }
+
+      const nextChecklist: MechanicVerificationChecklist = {
+        nationalId: Boolean(nextEvidence.nationalIdPath),
+        businessPermit: Boolean(nextEvidence.businessPermitPath),
+        certificates: nextEvidence.certificatePaths.length > 0,
+        profilePhoto: Boolean(nextEvidence.profilePhotoPath),
+      };
+
+      const { error: draftError } = await saveMechanicVerificationDraft(user.id, nextChecklist, nextEvidence);
+      if (draftError) throw draftError;
+
+      setEvidence(nextEvidence);
+      setChecklist(nextChecklist);
+      setStatus((current) => (current === "rejected" ? "rejected" : "draft"));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to save this verification image.");
+    } finally {
+      setUploadingKey(null);
+    }
+  };
+
+  const chooseFromLibrary = async (key: EvidenceKey) => {
+    if (uploadingKey) return;
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("Photo access is required to upload a verification image from this device.");
+        return;
+      }
+
+      const multipleCertificates = key === "certificates";
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: multipleCertificates,
+        selectionLimit: multipleCertificates ? 5 : 1,
+        allowsEditing: key === "profilePhoto" && !multipleCertificates,
+        quality: 0.85,
+        exif: false,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+      await persistImages(key, result.assets);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to open photos on this device.");
+    }
+  };
+
+  const offerUploadFallback = (key: EvidenceKey, message: string) => {
+    Alert.alert(
+      "Camera unavailable",
+      `${message} You can upload an existing image instead.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Upload instead", onPress: () => void chooseFromLibrary(key) },
+      ],
+    );
+  };
+
+  const captureWithCamera = async (key: EvidenceKey) => {
+    if (uploadingKey || status === "pending" || status === "approved") return;
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        offerUploadFallback(key, "AutoAssist could not access the camera.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        cameraType:
+          key === "profilePhoto" && !isGarage
+            ? ImagePicker.CameraType.front
+            : ImagePicker.CameraType.back,
+        allowsEditing: key === "profilePhoto",
+        quality: 0.85,
+        exif: false,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+      await persistImages(key, result.assets);
+    } catch (caught) {
+      offerUploadFallback(
+        key,
+        caught instanceof Error ? caught.message : "The camera could not be opened.",
+      );
+    }
   };
 
   const identityReady = isGarage ? checklist.businessPermit : checklist.nationalId;
   const allReady = identityReady && checklist.certificates && checklist.profilePhoto;
 
   const submit = async () => {
-    if (!allReady || loading) return;
+    if (!allReady || loading || uploadingKey) return;
 
     const providerChecklist: MechanicVerificationChecklist = {
       nationalId: isGarage ? false : checklist.nationalId,
       businessPermit: isGarage ? checklist.businessPermit : false,
       certificates: checklist.certificates,
       profilePhoto: checklist.profilePhoto,
+    };
+
+    const providerEvidence: MechanicVerificationEvidence = {
+      nationalIdPath: isGarage ? null : evidence.nationalIdPath,
+      businessPermitPath: isGarage ? evidence.businessPermitPath : null,
+      certificatePaths: evidence.certificatePaths,
+      profilePhotoPath: evidence.profilePhotoPath,
     };
 
     if (!backendEnabled) {
@@ -104,9 +272,14 @@ export default function MechanicVerificationFunctional() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: submitError } = await submitMechanicVerification(user.id, providerChecklist);
+      const { data, error: submitError } = await submitMechanicVerification(
+        user.id,
+        providerChecklist,
+        providerEvidence,
+      );
       if (submitError) throw submitError;
       setChecklist(providerChecklist);
+      setEvidence(providerEvidence);
       setStatus(data.status === "rejected" ? "rejected" : "pending");
       submitVerification();
       await refreshBackend();
@@ -129,6 +302,7 @@ export default function MechanicVerificationFunctional() {
   }
 
   const approved = state.mechanicProfile.verified || status === "approved";
+  const locked = status === "pending" || approved;
 
   return (
     <View style={styles.screen}>
@@ -165,29 +339,75 @@ export default function MechanicVerificationFunctional() {
               <SymbolView name="exclamationmark.triangle.fill" size={28} tintColor="#D9363E" />
               <View style={styles.statusCopy}>
                 <Text style={styles.rejectedTitle}>Verification needs attention</Text>
-                <Text style={styles.statusText}>{reviewNote || "Review the verification information and submit it again."}</Text>
+                <Text style={styles.statusText}>{reviewNote || "Retake or replace the requested evidence, then submit it again."}</Text>
               </View>
             </View>
           ) : (
             <View style={styles.introCard}>
               <Text style={styles.introTitle}>{isGarage ? "Verify the garage/business" : "Verify your identity"}</Text>
               <Text style={styles.introText}>
-                {isGarage
-                  ? "A valid business permit is the required identity document for this garage account. Also confirm your certificates and business/profile photo."
-                  : "Your National ID is the required identity document for this individual mechanic account. Also confirm your certificates and profile photo."}
+                Tap each item to open the camera first. If the camera is unavailable or permission is denied, AutoAssist will offer an upload-from-device option.
               </Text>
             </View>
           )}
 
           <View style={styles.list}>
             {isGarage ? (
-              <ChecklistCard title="Business permit" subtitle="Valid garage/business permit ready for review" checked={checklist.businessPermit} onPress={() => toggle("businessPermit")} disabled={status === "pending" || approved} />
+              <ChecklistCard
+                title="Business permit"
+                subtitle={checklist.businessPermit ? "Business permit image saved securely" : "Tap to scan or photograph the valid business permit"}
+                checked={checklist.businessPermit}
+                uploading={uploadingKey === "businessPermit"}
+                onPress={() => void captureWithCamera("businessPermit")}
+                onUpload={() => void chooseFromLibrary("businessPermit")}
+                disabled={locked || Boolean(uploadingKey)}
+              />
             ) : (
-              <ChecklistCard title="National ID" subtitle="Your National ID ready for identity review" checked={checklist.nationalId} onPress={() => toggle("nationalId")} disabled={status === "pending" || approved} />
+              <ChecklistCard
+                title="National ID"
+                subtitle={checklist.nationalId ? "National ID image saved securely" : "Tap to scan or photograph your National ID"}
+                checked={checklist.nationalId}
+                uploading={uploadingKey === "nationalId"}
+                onPress={() => void captureWithCamera("nationalId")}
+                onUpload={() => void chooseFromLibrary("nationalId")}
+                disabled={locked || Boolean(uploadingKey)}
+              />
             )}
-            <ChecklistCard title="Skill certificates" subtitle="Relevant training or trade certificates" checked={checklist.certificates} onPress={() => toggle("certificates")} disabled={status === "pending" || approved} />
-            <ChecklistCard title={isGarage ? "Business / profile photo" : "Profile photo"} subtitle={isGarage ? "Clear garage or professional business image" : "Clear professional profile photo"} checked={checklist.profilePhoto} onPress={() => toggle("profilePhoto")} disabled={status === "pending" || approved} />
+
+            <ChecklistCard
+              title="Skill certificates"
+              subtitle={
+                evidence.certificatePaths.length > 0
+                  ? `${evidence.certificatePaths.length} certificate image${evidence.certificatePaths.length === 1 ? "" : "s"} saved • Tap again to add another`
+                  : "Tap to photograph a certificate; upload can select up to 5 images"
+              }
+              checked={checklist.certificates}
+              uploading={uploadingKey === "certificates"}
+              onPress={() => void captureWithCamera("certificates")}
+              onUpload={() => void chooseFromLibrary("certificates")}
+              disabled={locked || Boolean(uploadingKey)}
+            />
+
+            <ChecklistCard
+              title={isGarage ? "Business / profile photo" : "Profile photo"}
+              subtitle={
+                checklist.profilePhoto
+                  ? "Profile image saved securely"
+                  : isGarage
+                    ? "Tap to photograph the garage or professional business profile"
+                    : "Tap to take a clear professional profile photo"
+              }
+              checked={checklist.profilePhoto}
+              uploading={uploadingKey === "profilePhoto"}
+              onPress={() => void captureWithCamera("profilePhoto")}
+              onUpload={() => void chooseFromLibrary("profilePhoto")}
+              disabled={locked || Boolean(uploadingKey)}
+            />
           </View>
+
+          {!locked ? (
+            <Text style={styles.privacyNote}>Verification images are private and stored under your AutoAssist account for review.</Text>
+          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -200,7 +420,7 @@ export default function MechanicVerificationFunctional() {
               <Text style={styles.secondaryText}>Refresh verification status</Text>
             </Pressable>
           ) : (
-            <Pressable disabled={!allReady || loading} style={[styles.primaryButton, (!allReady || loading) && styles.disabled]} onPress={() => void submit()}>
+            <Pressable disabled={!allReady || loading || Boolean(uploadingKey)} style={[styles.primaryButton, (!allReady || loading || Boolean(uploadingKey)) && styles.disabled]} onPress={() => void submit()}>
               {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{status === "rejected" ? "Resubmit verification" : "Submit verification"}</Text>}
             </Pressable>
           )}
@@ -216,18 +436,46 @@ export default function MechanicVerificationFunctional() {
   );
 }
 
-function ChecklistCard({ title, subtitle, checked, onPress, disabled }: { title: string; subtitle: string; checked: boolean; onPress: () => void; disabled: boolean }) {
+function ChecklistCard({
+  title,
+  subtitle,
+  checked,
+  uploading,
+  onPress,
+  onUpload,
+  disabled,
+}: {
+  title: string;
+  subtitle: string;
+  checked: boolean;
+  uploading: boolean;
+  onPress: () => void;
+  onUpload: () => void;
+  disabled: boolean;
+}) {
   return (
-    <Pressable disabled={disabled} onPress={onPress} style={[styles.checkCard, checked && styles.checkCardReady]}>
-      <View style={[styles.checkIcon, checked && styles.checkIconReady]}>
-        <SymbolView name={checked ? "checkmark" : "doc"} size={18} tintColor={checked ? "#FFFFFF" : "#667085"} />
-      </View>
-      <View style={styles.checkCopy}>
-        <Text style={styles.checkTitle}>{title}</Text>
-        <Text style={styles.checkSubtitle}>{subtitle}</Text>
-      </View>
-      <Text style={[styles.checkStatus, checked && styles.checkStatusReady]}>{checked ? "READY" : "ADD"}</Text>
-    </Pressable>
+    <View style={[styles.checkCard, checked && styles.checkCardReady]}>
+      <Pressable disabled={disabled} onPress={onPress} style={styles.checkMainAction}>
+        <View style={[styles.checkIcon, checked && styles.checkIconReady]}>
+          {uploading ? (
+            <ActivityIndicator size="small" color={checked ? "#FFFFFF" : "#1857A6"} />
+          ) : (
+            <SymbolView name={checked ? "checkmark" : "camera.fill"} size={18} tintColor={checked ? "#FFFFFF" : "#667085"} />
+          )}
+        </View>
+        <View style={styles.checkCopy}>
+          <Text style={styles.checkTitle}>{title}</Text>
+          <Text style={styles.checkSubtitle}>{uploading ? "Saving securely…" : subtitle}</Text>
+        </View>
+        <Text style={[styles.checkStatus, checked && styles.checkStatusReady]}>{uploading ? "SAVING" : checked ? "READY" : "CAMERA"}</Text>
+      </Pressable>
+      {!disabled && !uploading ? (
+        <Pressable onPress={onUpload} style={styles.uploadFallbackButton}>
+          <SymbolView name="photo.on.rectangle" size={14} tintColor="#1857A6" />
+          <Text style={styles.uploadFallbackText}>Upload instead</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -256,8 +504,9 @@ const styles = StyleSheet.create({
   rejectedTitle: { color: "#D9363E", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   statusText: { color: "#475467", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular", marginTop: 4 },
   list: { gap: 10 },
-  checkCard: { minHeight: 74, flexDirection: "row", alignItems: "center", gap: 12, padding: 13, borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 13, backgroundColor: "#FFFFFF" },
+  checkCard: { borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 13, backgroundColor: "#FFFFFF", overflow: "hidden" },
   checkCardReady: { borderColor: "#B7DFC9", backgroundColor: "#F7FCF9" },
+  checkMainAction: { minHeight: 74, flexDirection: "row", alignItems: "center", gap: 12, padding: 13 },
   checkIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: "#F2F4F7", alignItems: "center", justifyContent: "center" },
   checkIconReady: { backgroundColor: "#1B8A5A" },
   checkCopy: { flex: 1 },
@@ -265,6 +514,9 @@ const styles = StyleSheet.create({
   checkSubtitle: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 3 },
   checkStatus: { color: "#98A2B3", fontSize: 9, fontFamily: "Inter_600SemiBold" },
   checkStatusReady: { color: "#1B8A5A" },
+  uploadFallbackButton: { minHeight: 36, borderTopWidth: 1, borderTopColor: "#EAECF0", flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", backgroundColor: "#FAFCFF" },
+  uploadFallbackText: { color: "#1857A6", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  privacyNote: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 12, textAlign: "center" },
   error: { color: "#D9363E", backgroundColor: "#FFF1F2", padding: 10, borderRadius: 10, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 14 },
   primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 20 },
   disabled: { backgroundColor: "#A9C2DF" },
