@@ -1,4 +1,4 @@
-import { Image } from "expo-image";
+import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,31 +10,31 @@ const roles = [
     key: "motorist",
     title: "Motorist",
     subtitle: "Request repairs, spare parts and towing",
-    icon: require("../../assets/images/motorist.png"),
+    icon: { ios: "car.fill", android: "directions_car", web: "directions_car" },
   },
   {
     key: "mechanic",
     title: "Mechanic",
     subtitle: "Create your profile, verify your details and receive repair jobs",
-    icon: require("../../assets/images/mechanic.png"),
+    icon: { ios: "wrench.and.screwdriver.fill", android: "handyman", web: "handyman" },
   },
   {
     key: "partsdealer",
     title: "Parts Dealer",
     subtitle: "Set up your store and fulfil spare-parts requests",
-    icon: require("../../assets/images/partsdealer.png"),
+    icon: { ios: "shippingbox.fill", android: "inventory_2", web: "inventory_2" },
   },
   {
     key: "towing",
     title: "Towing Agent",
     subtitle: "Set up your provider profile and receive towing requests",
-    icon: require("../../assets/images/towingagent.png"),
+    icon: { ios: "truck.box.fill", android: "local_shipping", web: "local_shipping" },
   },
   {
     key: "rider",
     title: "Rider",
     subtitle: "Create your delivery profile and accept spare-parts deliveries",
-    icon: require("../../assets/images/rider.png"),
+    icon: { ios: "bicycle", android: "two_wheeler", web: "two_wheeler" },
   },
 ] as const;
 
@@ -70,7 +70,12 @@ export default function RoleSelection() {
                 style={({ pressed }) => [styles.roleCard, pressed && styles.roleCardPressed]}
               >
                 <View style={styles.imageBorder}>
-                  <Image style={styles.roleIcon} source={role.icon} />
+                  <SymbolView
+                    name={role.icon}
+                    size={25}
+                    tintColor="#1857A6"
+                    fallback={<Text style={styles.iconFallback}>•</Text>}
+                  />
                 </View>
                 <View style={styles.roleContent}>
                   <Text style={styles.buttonTitle}>{role.title}</Text>
@@ -104,7 +109,7 @@ const styles = StyleSheet.create({
   roleCard: { minHeight: 82, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 },
   roleCardPressed: { backgroundColor: "#F5F9FE", borderColor: "#B8D2F0" },
   imageBorder: { width: 48, height: 48, borderWidth: 1, borderColor: "#D5E4F7", backgroundColor: "#EAF2FD", borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  roleIcon: { width: 24, height: 24 },
+  iconFallback: { color: "#1857A6", fontSize: 24, lineHeight: 24, fontFamily: "Inter_600SemiBold" },
   roleContent: { flex: 1, gap: 4 },
   buttonTitle: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   buttonSubTitle: { color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
