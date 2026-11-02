@@ -37,10 +37,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchProfile(userId: string) {
-  if (!supabase) return null;
+async function fetchProfile(userId: string): Promise<ProfileRow | null> {
+  const client = supabase;
+  if (!client) return null;
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from("profiles")
     .select("*")
     .eq("id", userId)
@@ -69,7 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase;
+    if (!client) {
       setLoading(false);
       return;
     }
@@ -78,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const restore = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const { data, error } = await client.auth.getSession();
         if (error) throw error;
         if (!mounted) return;
         await loadProfileForSession(data.session);
@@ -97,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       void loadProfileForSession(nextSession).catch((error) => {
         console.warn("Unable to load AutoAssist profile", error);
@@ -117,10 +119,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return nextProfile;
   }, [session?.user]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    if (!supabase) throw new Error("Live backend is not configured on this device.");
+  const signIn = useCallback(async (email: string, password: string): Promise<ProfileRow> => {
+    const client = supabase;
+    if (!client) throw new Error("Live backend is not configured on this device.");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await client.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -129,15 +132,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!data.session?.user) throw new Error("Login succeeded but no session was returned.");
 
     const nextProfile = await fetchProfile(data.session.user.id);
+    if (!nextProfile) {
+      throw new Error("Your AutoAssist profile could not be loaded. Please try again.");
+    }
+
     setSession(data.session);
     setProfile(nextProfile);
     return nextProfile;
   }, []);
 
   const signUp = useCallback(async (input: SignUpInput) => {
-    if (!supabase) throw new Error("Live backend is not configured on this device.");
+    const client = supabase;
+    if (!client) throw new Error("Live backend is not configured on this device.");
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await client.auth.signUp({
       email: input.email.trim(),
       password: input.password,
       options: {
@@ -161,13 +169,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    if (!supabase) {
+    const client = supabase;
+    if (!client) {
       setSession(null);
       setProfile(null);
       return;
     }
 
-    const { error } = await supabase.auth.signOut();
+    const { error } = await client.auth.signOut();
     if (error) throw error;
     setSession(null);
     setProfile(null);
