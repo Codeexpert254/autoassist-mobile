@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -6,16 +6,40 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { type AccountRole, useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 
+const accountRoles: AccountRole[] = ["motorist", "mechanic", "partsdealer", "towing", "rider"];
+
+const roleLabels: Record<AccountRole, string> = {
+  motorist: "Motorist",
+  mechanic: "Mechanic",
+  partsdealer: "Parts Dealer",
+  towing: "Towing Agent",
+  rider: "Rider",
+};
+
+const providerNotes: Partial<Record<AccountRole, string>> = {
+  mechanic: "After login, you’ll complete your mechanic profile and submit verification details before receiving jobs.",
+  partsdealer: "After login, you’ll complete your store profile and verification before fulfilling live orders.",
+  towing: "After login, you’ll complete your provider profile and verification before receiving towing requests.",
+  rider: "After login, you’ll complete your rider profile and verification before accepting delivery jobs.",
+};
+
+function isAccountRole(value: string | undefined): value is AccountRole {
+  return Boolean(value && accountRoles.includes(value as AccountRole));
+}
+
 export default function Register() {
   const router = useRouter();
-  const { backendEnabled, signUp } = useAuth();
+  const params = useLocalSearchParams<{ role?: string }>();
+  const requestedRole = Array.isArray(params.role) ? params.role[0] : params.role;
+  const role: AccountRole = isAccountRole(requestedRole) ? requestedRole : "motorist";
+
+  const { backendEnabled, signOut, signUp } = useAuth();
   const { register: demoRegister } = useDemoApp();
   const [fullname, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<AccountRole>("motorist");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -33,6 +57,18 @@ export default function Register() {
     passwordIsLongEnough &&
     passwordsMatch;
 
+  const goToLogin = (requiresEmailConfirmation: boolean) => {
+    router.replace({
+      pathname: "/login",
+      params: {
+        accountCreated: "1",
+        email: email.trim(),
+        role,
+        needsConfirmation: requiresEmailConfirmation ? "1" : "0",
+      },
+    });
+  };
+
   const handleCreateAccount = async () => {
     setSubmitted(true);
     setServerError("");
@@ -40,9 +76,10 @@ export default function Register() {
 
     setLoading(true);
     try {
+      demoRegister({ name: fullname, email, phone: phoneNumber });
+
       if (!backendEnabled) {
-        demoRegister({ name: fullname, email, phone: phoneNumber });
-        router.replace("/roleselection");
+        goToLogin(false);
         return;
       }
 
@@ -54,14 +91,15 @@ export default function Register() {
         role,
       });
 
-      demoRegister({ name: fullname, email, phone: phoneNumber });
-
-      if (result.requiresEmailConfirmation) {
-        router.replace({ pathname: "/verifyaccount", params: { email: email.trim() } });
-        return;
+      if (!result.requiresEmailConfirmation) {
+        try {
+          await signOut();
+        } catch (signOutError) {
+          console.warn("Account created but automatic sign-out failed", signOutError);
+        }
       }
 
-      router.replace(role === "mechanic" ? "/mechanic/registration" : "/motorist/home");
+      goToLogin(result.requiresEmailConfirmation);
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to create your account.");
     } finally {
@@ -73,23 +111,19 @@ export default function Register() {
     <View style={styles.registerContainer}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Create your account</Text>
-          <Text style={styles.subTitle}>Choose how you will use AutoAssist, then create your secure account.</Text>
+          <View style={styles.headingRow}>
+            <View style={styles.headingCopy}>
+              <Text style={styles.title}>Create your {roleLabels[role]} account</Text>
+              <Text style={styles.subTitle}>A few details and your account is ready.</Text>
+            </View>
+            <Pressable onPress={() => router.replace("/roleselection")}>
+              <Text style={styles.changeRole}>Change role</Text>
+            </Pressable>
+          </View>
 
-          <Text style={styles.sectionLabel}>I am joining as</Text>
-          <View style={styles.roleRow}>
-            <RoleCard
-              title="Motorist"
-              subtitle="Get vehicle help"
-              selected={role === "motorist"}
-              onPress={() => setRole("motorist")}
-            />
-            <RoleCard
-              title="Mechanic"
-              subtitle="Receive repair jobs"
-              selected={role === "mechanic"}
-              onPress={() => setRole("mechanic")}
-            />
+          <View style={styles.roleSummary}>
+            <Text style={styles.roleSummaryLabel}>ACCOUNT TYPE</Text>
+            <Text style={styles.roleSummaryValue}>{roleLabels[role]}</Text>
           </View>
 
           <Field label="Full name" value={fullname} onChangeText={setFullName} placeholder="Abraham Masai" />
@@ -144,10 +178,10 @@ export default function Register() {
                     : "Use at least 8 characters."}
           </Text>
 
-          {role === "mechanic" ? (
+          {providerNotes[role] ? (
             <View style={styles.roleNote}>
-              <Text style={styles.roleNoteTitle}>Mechanic verification</Text>
-              <Text style={styles.roleNoteText}>After account creation, you’ll complete your garage profile and submit verification details before receiving live jobs.</Text>
+              <Text style={styles.roleNoteTitle}>What happens after login?</Text>
+              <Text style={styles.roleNoteText}>{providerNotes[role]}</Text>
             </View>
           ) : null}
 
@@ -176,16 +210,6 @@ export default function Register() {
   );
 }
 
-function RoleCard({ title, subtitle, selected, onPress }: { title: string; subtitle: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable style={[styles.roleCard, selected && styles.roleCardSelected]} onPress={onPress}>
-      <View style={[styles.roleIndicator, selected && styles.roleIndicatorSelected]} />
-      <Text style={[styles.roleTitle, selected && styles.roleTitleSelected]}>{title}</Text>
-      <Text style={styles.roleSubtitle}>{subtitle}</Text>
-    </Pressable>
-  );
-}
-
 function Field({ label, error, last, ...props }: any) {
   return (
     <View style={[styles.fieldContainer, last && styles.lastField]}>
@@ -205,17 +229,14 @@ const styles = StyleSheet.create({
   registerContainer: { flex: 1, backgroundColor: "#FFF" },
   safeArea: { flex: 1 },
   content: { paddingHorizontal: 20, paddingBottom: 30 },
-  title: { color: "#102A43", fontSize: 22, fontFamily: "Inter_600SemiBold", marginTop: 20, marginBottom: 10 },
-  subTitle: { color: "#667085", fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular", marginBottom: 22 },
-  sectionLabel: { color: "#344054", fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
-  roleRow: { flexDirection: "row", gap: 10, marginBottom: 22 },
-  roleCard: { flex: 1, minHeight: 82, borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, padding: 12, backgroundColor: "#FFFFFF" },
-  roleCardSelected: { borderColor: "#1857A6", backgroundColor: "#EAF2FD" },
-  roleIndicator: { width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: "#98A2B3", marginBottom: 8 },
-  roleIndicatorSelected: { borderColor: "#1857A6", backgroundColor: "#1857A6" },
-  roleTitle: { color: "#344054", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  roleTitleSelected: { color: "#1857A6" },
-  roleSubtitle: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 3 },
+  headingRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: 20, marginBottom: 16 },
+  headingCopy: { flex: 1 },
+  title: { color: "#102A43", fontSize: 22, lineHeight: 28, fontFamily: "Inter_600SemiBold", marginBottom: 6 },
+  subTitle: { color: "#667085", fontSize: 13, lineHeight: 19, fontFamily: "Inter_400Regular" },
+  changeRole: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 5 },
+  roleSummary: { borderRadius: 12, backgroundColor: "#EAF2FD", borderWidth: 1, borderColor: "#D5E4F7", paddingHorizontal: 14, paddingVertical: 11, marginBottom: 22 },
+  roleSummaryLabel: { color: "#667085", fontSize: 9, letterSpacing: 0.7, fontFamily: "Inter_600SemiBold" },
+  roleSummaryValue: { color: "#1857A6", fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 3 },
   fieldContainer: { marginBottom: 16 },
   lastField: { marginBottom: 8 },
   fieldTitle: { color: "#344054", fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 5 },
@@ -223,7 +244,7 @@ const styles = StyleSheet.create({
   errorInput: { borderColor: "#D9363E" },
   infoText: { color: "#667085", fontSize: 11, fontFamily: "Inter_400Regular", marginBottom: 14 },
   errorText: { color: "#D9363E" },
-  roleNote: { backgroundColor: "#EAF2FD", borderWidth: 1, borderColor: "#B8D2F0", borderRadius: 10, padding: 12, marginBottom: 14 },
+  roleNote: { backgroundColor: "#F5F9FE", borderWidth: 1, borderColor: "#DCE9F8", borderRadius: 10, padding: 12, marginBottom: 14 },
   roleNoteTitle: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 4 },
   roleNoteText: { color: "#344054", fontFamily: "Inter_400Regular", fontSize: 10, lineHeight: 15 },
   serverError: { color: "#D9363E", backgroundColor: "#FFF1F2", borderRadius: 10, padding: 10, fontFamily: "Inter_400Regular", fontSize: 11, marginBottom: 12 },
