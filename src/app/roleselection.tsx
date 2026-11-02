@@ -15,7 +15,7 @@ const roles = [
   {
     key: "mechanic",
     title: "Mechanic",
-    subtitle: "Create your profile, verify your details and receive repair jobs",
+    subtitle: "Register as an individual mechanic or as a garage/business",
     icon: { ios: "wrench.and.screwdriver.fill", android: "handyman", web: "handyman" },
   },
   {
@@ -44,6 +44,12 @@ export default function RoleSelection() {
 
   const chooseRole = (role: DemoRole) => {
     selectRole(role);
+
+    if (role === "mechanic") {
+      router.push("/mechanic/account-type");
+      return;
+    }
+
     router.push({ pathname: "/register", params: { role } });
   };
 
