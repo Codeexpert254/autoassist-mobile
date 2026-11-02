@@ -7,6 +7,7 @@ import { Stack } from "expo-router";
 
 import { DemoToast } from "@/components/demo-toast";
 import { DemoAppProvider } from "@/context/demo-app-context";
+import { RepairFlowProvider } from "@/context/repair-flow-context";
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -20,12 +21,14 @@ export default function RootLayout() {
 
   return (
     <DemoAppProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      />
-      <DemoToast />
+      <RepairFlowProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        />
+        <DemoToast />
+      </RepairFlowProvider>
     </DemoAppProvider>
   );
 }
