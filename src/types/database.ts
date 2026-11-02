@@ -17,9 +17,9 @@ export type Database = {
         Relationships: [];
       };
       mechanic_profiles: {
-        Row: { created_at: string; garage_name: string; location: string; rating: number; reviews_count: number; services: string[]; updated_at: string; user_id: string; verified: boolean };
-        Insert: { created_at?: string; garage_name?: string; location?: string; rating?: number; reviews_count?: number; services?: string[]; updated_at?: string; user_id: string; verified?: boolean };
-        Update: { created_at?: string; garage_name?: string; location?: string; rating?: number; reviews_count?: number; services?: string[]; updated_at?: string; user_id?: string; verified?: boolean };
+        Row: { created_at: string; garage_name: string; location: string; provider_type: string; rating: number; reviews_count: number; services: string[]; updated_at: string; user_id: string; verified: boolean };
+        Insert: { created_at?: string; garage_name?: string; location?: string; provider_type?: string; rating?: number; reviews_count?: number; services?: string[]; updated_at?: string; user_id: string; verified?: boolean };
+        Update: { created_at?: string; garage_name?: string; location?: string; provider_type?: string; rating?: number; reviews_count?: number; services?: string[]; updated_at?: string; user_id?: string; verified?: boolean };
         Relationships: [];
       };
       mechanic_verification_submissions: {
@@ -29,9 +29,9 @@ export type Database = {
         Relationships: [];
       };
       profiles: {
-        Row: { created_at: string; full_name: string; id: string; phone: string; role: string; updated_at: string };
-        Insert: { created_at?: string; full_name?: string; id: string; phone?: string; role?: string; updated_at?: string };
-        Update: { created_at?: string; full_name?: string; id?: string; phone?: string; role?: string; updated_at?: string };
+        Row: { created_at: string; full_name: string; id: string; phone: string; provider_type: string | null; role: string; updated_at: string };
+        Insert: { created_at?: string; full_name?: string; id: string; phone?: string; provider_type?: string | null; role?: string; updated_at?: string };
+        Update: { created_at?: string; full_name?: string; id?: string; phone?: string; provider_type?: string | null; role?: string; updated_at?: string };
         Relationships: [];
       };
       ratings: {
@@ -59,9 +59,9 @@ export type Database = {
         Relationships: [];
       };
       vehicles: {
-        Row: { created_at: string; id: string; make: string; model: string; owner_id: string; power_source: string; registration: string; transmission: string; updated_at: string; year: number };
-        Insert: { created_at?: string; id?: string; make: string; model: string; owner_id: string; power_source: string; registration: string; transmission: string; updated_at?: string; year: number };
-        Update: { created_at?: string; id?: string; make?: string; model?: string; owner_id?: string; power_source?: string; registration?: string; transmission?: string; updated_at?: string; year?: number };
+        Row: { archived_at: string | null; created_at: string; fuel_type: string | null; id: string; make: string; model: string; owner_id: string; power_source: string; registration: string; transmission: string; updated_at: string; year: number };
+        Insert: { archived_at?: string | null; created_at?: string; fuel_type?: string | null; id?: string; make: string; model: string; owner_id: string; power_source: string; registration: string; transmission: string; updated_at?: string; year: number };
+        Update: { archived_at?: string | null; created_at?: string; fuel_type?: string | null; id?: string; make?: string; model?: string; owner_id?: string; power_source?: string; registration?: string; transmission?: string; updated_at?: string; year?: number };
         Relationships: [];
       };
     };
