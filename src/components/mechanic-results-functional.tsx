@@ -27,7 +27,9 @@ export default function MechanicResultsFunctional() {
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Mechanics near you</Text>
             <Text style={styles.subtitle}>
-              Matched for {state.problem.symptom.toLowerCase()} • {state.vehicle.make} {state.vehicle.model}
+              {state.vehicleSaved
+                ? `Matched for ${state.problem.symptom.toLowerCase()} • ${state.vehicle.make} ${state.vehicle.model}`
+                : `Matched for ${state.problem.symptom.toLowerCase()} near your location`}
             </Text>
           </View>
         </View>
@@ -41,7 +43,9 @@ export default function MechanicResultsFunctional() {
               <Text style={styles.matchTitle}>{liveBackend ? "Verified live providers" : "Demo provider matches"}</Text>
               <Text style={styles.matchText}>
                 {liveBackend
-                  ? "Only mechanics approved on AutoAssist appear in this list."
+                  ? state.vehicleSaved
+                    ? "Only mechanics approved on AutoAssist appear in this list. Vehicle details help refine compatibility."
+                    : "Only mechanics approved on AutoAssist appear in this list. Add vehicle details later if you want more precise compatibility matching."
                   : "Developer Preview uses sample mechanics so the full journey remains testable."}
               </Text>
             </View>
