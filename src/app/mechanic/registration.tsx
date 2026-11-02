@@ -1,6 +1,5 @@
-import { StaticScreen } from "@/components/autoassist-ui";
-import { mechanicScreens } from "@/data/autoassist-screens";
+import MechanicRegistrationFunctional from "@/components/mechanic-registration-functional";
 
 export default function Registration() {
-  return <StaticScreen {...mechanicScreens.registration} />;
+  return <MechanicRegistrationFunctional />;
 }
