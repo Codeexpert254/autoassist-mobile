@@ -1,19 +1,24 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useAuth } from "@/context/auth-context";
+import { type AccountRole, useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
-import { getMechanicProfile } from "@/services/repair-backend";
 
-const roleLabels: Record<string, string> = {
+const accountRoles: AccountRole[] = ["motorist", "mechanic", "partsdealer", "towing", "rider"];
+
+const roleLabels: Record<AccountRole, string> = {
   motorist: "Motorist",
   mechanic: "Mechanic",
   partsdealer: "Parts Dealer",
   towing: "Towing Agent",
   rider: "Rider",
 };
+
+function isAccountRole(value: string | undefined): value is AccountRole {
+  return Boolean(value && accountRoles.includes(value as AccountRole));
+}
 
 export default function Login() {
   const router = useRouter();
@@ -23,8 +28,10 @@ export default function Login() {
     role?: string;
     needsConfirmation?: string;
   }>();
-  const { backendEnabled, signIn } = useAuth();
-  const { state: demoState, login: demoLogin } = useDemoApp();
+  const requestedRole = Array.isArray(params.role) ? params.role[0] : params.role;
+  const { backendEnabled, signIn, signOut } = useAuth();
+  const { login: demoLogin, selectRole } = useDemoApp();
+  const [loginRole, setLoginRole] = useState<AccountRole>(isAccountRole(requestedRole) ? requestedRole : "motorist");
   const [email, setEmail] = useState(params.email ?? "");
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -36,42 +43,13 @@ export default function Login() {
   const formIsValid = emailIsValid && passwordIsValid;
   const accountCreated = params.accountCreated === "1";
   const needsConfirmation = params.needsConfirmation === "1";
-  const createdRole = roleLabels[params.role ?? ""] ?? "AutoAssist";
+  const createdRole = isAccountRole(requestedRole) ? roleLabels[requestedRole] : "AutoAssist";
 
-  const routeDemoUser = () => {
-    switch (demoState.role) {
+  const routeUser = (role: AccountRole) => {
+    switch (role) {
       case "mechanic":
-        router.replace("/mechanic/registration");
-        break;
-      case "partsdealer":
-        router.replace("/partsdealer/registration");
-        break;
-      case "towing":
-        router.replace("/towing/registration");
-        break;
-      case "rider":
-        router.replace("/rider/registration");
-        break;
-      default:
-        router.replace("/motorist/home");
-    }
-  };
-
-  const routeAuthenticatedUser = async (profile: Awaited<ReturnType<typeof signIn>>) => {
-    switch (profile.role) {
-      case "mechanic": {
-        const mechanicResult = await getMechanicProfile(profile.id);
-        if (mechanicResult.error) throw mechanicResult.error;
-
-        if (!mechanicResult.data) {
-          router.replace("/mechanic/registration");
-        } else if (mechanicResult.data.verified) {
-          router.replace("/mechanic/dashboard");
-        } else {
-          router.replace("/mechanic/verification");
-        }
+        router.replace("/mechanic/dashboard");
         return;
-      }
       case "partsdealer":
         router.replace("/partsdealer/registration");
         return;
@@ -94,14 +72,25 @@ export default function Login() {
     setLoading(true);
     try {
       if (!backendEnabled) {
+        selectRole(loginRole);
         demoLogin(email);
-        routeDemoUser();
+        routeUser(loginRole);
         return;
       }
 
       const profile = await signIn(email, password);
+      const actualRole = profile.role as AccountRole;
+
+      if (actualRole !== loginRole) {
+        await signOut();
+        throw new Error(
+          `This account is registered as ${roleLabels[actualRole] ?? "a different role"}. Select ${roleLabels[actualRole] ?? "the correct role"} under “Log in as”, or use a ${roleLabels[loginRole]} account.`,
+        );
+      }
+
+      selectRole(loginRole);
       demoLogin(email);
-      await routeAuthenticatedUser(profile);
+      routeUser(loginRole);
     } catch (error) {
       setServerError(error instanceof Error ? error.message : "Unable to log in. Please try again.");
     } finally {
@@ -109,98 +98,128 @@ export default function Login() {
     }
   };
 
+  const createAccount = () => {
+    if (loginRole === "mechanic") {
+      router.push("/mechanic/account-type");
+      return;
+    }
+
+    router.push({ pathname: "/register", params: { role: loginRole } });
+  };
+
   return (
     <View style={styles.loginContainer}>
       <SafeAreaView style={styles.safeArea}>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subTitle}>Log in to continue to AutoAssist.</Text>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subTitle}>Choose the account type you want to access, then log in.</Text>
 
-        {accountCreated ? (
-          <View style={styles.successBanner}>
-            <Text style={styles.successTitle}>Account created successfully</Text>
-            <Text style={styles.successText}>
-              {needsConfirmation
-                ? `Your ${createdRole} account is ready. Confirm your email, then log in below.`
-                : `Your ${createdRole} account is ready. Log in below to continue.`}
-            </Text>
+          <Text style={styles.roleLabel}>Log in as</Text>
+          <View style={styles.roleWrap}>
+            {accountRoles.map((role) => (
+              <Pressable
+                key={role}
+                onPress={() => {
+                  setLoginRole(role);
+                  setServerError("");
+                }}
+                style={[styles.roleChip, loginRole === role && styles.roleChipActive]}
+              >
+                <Text style={[styles.roleChipText, loginRole === role && styles.roleChipTextActive]}>
+                  {roleLabels[role]}
+                </Text>
+              </Pressable>
+            ))}
           </View>
-        ) : null}
 
-        <View style={styles.emailContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={[styles.input, submitted && !emailIsValid && styles.errorInput]}
-            placeholder="name@example.com"
-            placeholderTextColor="#667085"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={email}
-            onChangeText={setEmail}
-          />
-          {submitted && !emailIsValid ? (
-            <Text style={styles.errorText}>Enter a valid email address.</Text>
+          {accountCreated ? (
+            <View style={styles.successBanner}>
+              <Text style={styles.successTitle}>Account created successfully</Text>
+              <Text style={styles.successText}>
+                {needsConfirmation
+                  ? `Your ${createdRole} account is ready. Confirm your email, then log in below.`
+                  : `Your ${createdRole} account is ready. Log in below to continue.`}
+              </Text>
+            </View>
           ) : null}
-        </View>
 
-        <View style={styles.passwordContainer}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={[styles.input, submitted && !passwordIsValid && styles.errorInput]}
-            placeholder="••••••••"
-            placeholderTextColor="#667085"
-            secureTextEntry
-            autoCapitalize="none"
-            value={password}
-            onChangeText={setPassword}
-          />
-          {submitted && !passwordIsValid ? (
-            <Text style={styles.errorText}>Enter your password (at least 6 characters).</Text>
-          ) : null}
-        </View>
+          <View style={styles.emailContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={[styles.input, submitted && !emailIsValid && styles.errorInput]}
+              placeholder="name@example.com"
+              placeholderTextColor="#667085"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={email}
+              onChangeText={setEmail}
+            />
+            {submitted && !emailIsValid ? (
+              <Text style={styles.errorText}>Enter a valid email address.</Text>
+            ) : null}
+          </View>
 
-        {serverError ? <Text style={styles.serverError}>{serverError}</Text> : null}
+          <View style={styles.passwordContainer}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={[styles.input, submitted && !passwordIsValid && styles.errorInput]}
+              placeholder="••••••••"
+              placeholderTextColor="#667085"
+              secureTextEntry
+              autoCapitalize="none"
+              value={password}
+              onChangeText={setPassword}
+            />
+            {submitted && !passwordIsValid ? (
+              <Text style={styles.errorText}>Enter your password (at least 6 characters).</Text>
+            ) : null}
+          </View>
 
-        <Pressable onPress={() => router.push("/forgotpassword")}>
-          <Text style={styles.forgotPassword}>Forgot password?</Text>
-        </Pressable>
+          {serverError ? <Text style={styles.serverError}>{serverError}</Text> : null}
 
-        <Pressable
-          disabled={!formIsValid || loading}
-          style={[styles.loginButton, (!formIsValid || loading) && styles.loginButtonDisabled]}
-          onPress={() => void handleLogin()}
-        >
-          {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Log in</Text>}
-        </Pressable>
+          <Pressable onPress={() => router.push("/forgotpassword")}>
+            <Text style={styles.forgotPassword}>Forgot password?</Text>
+          </Pressable>
 
-        {!backendEnabled ? (
-          <Text style={styles.demoHint}>
-            Live backend variables are not configured on this device, so login will use Developer Preview mode.
+          <Pressable
+            disabled={!formIsValid || loading}
+            style={[styles.loginButton, (!formIsValid || loading) && styles.loginButtonDisabled]}
+            onPress={() => void handleLogin()}
+          >
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>Log in as {roleLabels[loginRole]}</Text>}
+          </Pressable>
+
+          {!backendEnabled ? (
+            <Text style={styles.demoHint}>
+              Live backend variables are not configured on this device, so login will use Developer Preview mode.
+            </Text>
+          ) : (
+            <Text style={styles.liveHint}>Secure login powered by AutoAssist cloud services.</Text>
+          )}
+
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.orText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable style={[styles.input, styles.createAccountButton]} onPress={createAccount}>
+            <Text style={styles.createAccount}>Create a new {roleLabels[loginRole]} account</Text>
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/roleselection")}>
+            <Text style={styles.allRolesLink}>View all account types</Text>
+          </Pressable>
+
+          <Text style={styles.termsOfService}>
+            By continuing, you agree to the Terms of Service and Privacy Policy.
           </Text>
-        ) : (
-          <Text style={styles.liveHint}>Secure login powered by AutoAssist cloud services.</Text>
-        )}
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.orText}>OR</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Pressable
-          style={[styles.input, styles.createAccountButton]}
-          onPress={() => router.push("/roleselection")}
-        >
-          <Text style={styles.createAccount}>Create a new account</Text>
-        </Pressable>
-
-        <Text style={styles.termsOfService}>
-          By continuing, you agree to the Terms of Service and Privacy Policy.
-        </Text>
-
-        <Pressable style={styles.devPreviewButton} onPress={() => router.push("/preview")}>
-          <Text style={styles.devPreviewText}>Developer Preview</Text>
-        </Pressable>
+          <Pressable style={styles.devPreviewButton} onPress={() => router.push("/preview")}>
+            <Text style={styles.devPreviewText}>Developer Preview</Text>
+          </Pressable>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -208,9 +227,16 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   loginContainer: { flex: 1, backgroundColor: "#FFFFFF" },
-  safeArea: { flex: 1, paddingHorizontal: 20, backgroundColor: "#FFFFFF" },
-  title: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 22, marginTop: 20, marginBottom: 12 },
-  subTitle: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 13, marginBottom: 22 },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
+  content: { paddingHorizontal: 20, paddingBottom: 24 },
+  title: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 22, marginTop: 20, marginBottom: 8 },
+  subTitle: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 13, lineHeight: 19, marginBottom: 18 },
+  roleLabel: { color: "#344054", fontFamily: "Inter_600SemiBold", fontSize: 12, marginBottom: 8 },
+  roleWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 },
+  roleChip: { minHeight: 36, borderRadius: 18, borderWidth: 1, borderColor: "#D0D5DD", paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
+  roleChipActive: { borderColor: "#1857A6", backgroundColor: "#EAF2FD" },
+  roleChipText: { color: "#667085", fontFamily: "Inter_600SemiBold", fontSize: 10 },
+  roleChipTextActive: { color: "#1857A6" },
   successBanner: { backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 20 },
   successTitle: { color: "#067647", fontFamily: "Inter_600SemiBold", fontSize: 12, marginBottom: 4 },
   successText: { color: "#344054", fontFamily: "Inter_400Regular", fontSize: 11, lineHeight: 16 },
@@ -227,12 +253,13 @@ const styles = StyleSheet.create({
   buttonText: { color: "#FFFFFF", fontFamily: "Inter_600SemiBold", fontSize: 14, textAlign: "center" },
   demoHint: { color: "#667085", fontFamily: "Inter_400Regular", fontSize: 10, textAlign: "center", marginTop: 8, marginBottom: 18 },
   liveHint: { color: "#1B8A5A", fontFamily: "Inter_400Regular", fontSize: 10, textAlign: "center", marginTop: 8, marginBottom: 18 },
-  dividerRow: { flexDirection: "row", marginBottom: 25, alignItems: "center" },
+  dividerRow: { flexDirection: "row", marginBottom: 20, alignItems: "center" },
   dividerLine: { backgroundColor: "#D0D5DD", flex: 1, height: 1 },
   orText: { marginHorizontal: 12, fontFamily: "Inter_400Regular", fontSize: 12, color: "#667085" },
-  createAccountButton: { alignItems: "center", marginBottom: 30 },
-  createAccount: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  createAccountButton: { alignItems: "center", marginBottom: 12 },
+  createAccount: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 13, textAlign: "center" },
+  allRolesLink: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11, textAlign: "center", marginBottom: 24 },
   termsOfService: { width: 310, alignSelf: "center", textAlign: "center", fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#667085" },
-  devPreviewButton: { alignSelf: "center", marginTop: "auto", marginBottom: 12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#EAF2FD" },
+  devPreviewButton: { alignSelf: "center", marginTop: 20, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#EAF2FD" },
   devPreviewText: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11 },
 });
