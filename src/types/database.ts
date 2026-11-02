@@ -23,9 +23,9 @@ export type Database = {
         Relationships: [];
       };
       mechanic_verification_submissions: {
-        Row: { business_permit_confirmed: boolean; certificates_confirmed: boolean; national_id_confirmed: boolean; profile_photo_confirmed: boolean; review_note: string | null; reviewed_at: string | null; status: string; submitted_at: string; updated_at: string; user_id: string };
-        Insert: { business_permit_confirmed?: boolean; certificates_confirmed?: boolean; national_id_confirmed?: boolean; profile_photo_confirmed?: boolean; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id: string };
-        Update: { business_permit_confirmed?: boolean; certificates_confirmed?: boolean; national_id_confirmed?: boolean; profile_photo_confirmed?: boolean; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id?: string };
+        Row: { business_permit_confirmed: boolean; business_permit_path: string | null; certificate_paths: string[]; certificates_confirmed: boolean; national_id_confirmed: boolean; national_id_path: string | null; profile_photo_confirmed: boolean; profile_photo_path: string | null; review_note: string | null; reviewed_at: string | null; status: string; submitted_at: string; updated_at: string; user_id: string };
+        Insert: { business_permit_confirmed?: boolean; business_permit_path?: string | null; certificate_paths?: string[]; certificates_confirmed?: boolean; national_id_confirmed?: boolean; national_id_path?: string | null; profile_photo_confirmed?: boolean; profile_photo_path?: string | null; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id: string };
+        Update: { business_permit_confirmed?: boolean; business_permit_path?: string | null; certificate_paths?: string[]; certificates_confirmed?: boolean; national_id_confirmed?: boolean; national_id_path?: string | null; profile_photo_confirmed?: boolean; profile_photo_path?: string | null; review_note?: string | null; reviewed_at?: string | null; status?: string; submitted_at?: string; updated_at?: string; user_id?: string };
         Relationships: [];
       };
       profiles: {
