@@ -34,6 +34,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<ProfileRow>;
   signUp: (input: SignUpInput) => Promise<{ profile: ProfileRow | null; requiresEmailConfirmation: boolean }>;
+  resendConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<ProfileRow | null>;
 };
@@ -179,6 +180,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { profile: nextProfile, requiresEmailConfirmation };
   }, []);
 
+  const resendConfirmation = useCallback(async (email: string) => {
+    const client = supabase;
+    if (!client) throw new Error("Live backend is not configured on this device.");
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) throw new Error("Enter your email address first.");
+
+    const emailRedirectTo = Linking.createURL("login");
+    const { error } = await client.auth.resend({
+      type: "signup",
+      email: normalizedEmail,
+      options: { emailRedirectTo },
+    });
+
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     const client = supabase;
     if (!client) {
@@ -203,10 +221,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(session?.user),
       signIn,
       signUp,
+      resendConfirmation,
       signOut,
       refreshProfile,
     }),
-    [session, profile, loading, signIn, signUp, signOut, refreshProfile],
+    [session, profile, loading, signIn, signUp, resendConfirmation, signOut, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
