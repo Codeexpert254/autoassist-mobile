@@ -30,7 +30,9 @@ function NotificationRouter() {
 
     const openResponse = (response: Notifications.NotificationResponse | null) => {
       const data = response?.notification.request.content.data;
-      const route = typeof data?.route === "string" ? data.route : null;
+      if (!data) return;
+
+      const route = typeof data.route === "string" ? data.route : null;
       if (!route) return;
 
       const params: Record<string, string> = {};
