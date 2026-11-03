@@ -1,21 +1,28 @@
 import { requireSupabase } from "@/lib/supabase";
 
 export type MechanicVerificationChecklist = {
-  nationalId: boolean;
+  identityClaimed: boolean;
+  nationalIdFront: boolean;
+  nationalIdBack: boolean;
+  identitySelfie: boolean;
   businessPermit: boolean;
   certificates: boolean;
   profilePhoto: boolean;
 };
 
 export type MechanicVerificationEvidence = {
-  nationalIdPath: string | null;
+  nationalIdFrontPath: string | null;
+  nationalIdBackPath: string | null;
+  selfiePath: string | null;
   businessPermitPath: string | null;
   certificatePaths: string[];
   profilePhotoPath: string | null;
 };
 
 export type VerificationImageKind =
-  | "national-id"
+  | "national-id-front"
+  | "national-id-back"
+  | "identity-selfie"
   | "business-permit"
   | "certificate"
   | "profile-photo";
@@ -39,13 +46,18 @@ function verificationPayload(
   checklist: MechanicVerificationChecklist,
   evidence: MechanicVerificationEvidence,
 ) {
+  const nationalIdComplete = checklist.nationalIdFront && checklist.nationalIdBack;
   return {
     user_id: userId,
-    national_id_confirmed: checklist.nationalId,
+    identity_claimed: checklist.identityClaimed,
+    national_id_confirmed: nationalIdComplete,
     business_permit_confirmed: checklist.businessPermit,
     certificates_confirmed: checklist.certificates,
     profile_photo_confirmed: checklist.profilePhoto,
-    national_id_path: evidence.nationalIdPath,
+    national_id_path: evidence.nationalIdFrontPath,
+    national_id_front_path: evidence.nationalIdFrontPath,
+    national_id_back_path: evidence.nationalIdBackPath,
+    selfie_path: evidence.selfiePath,
     business_permit_path: evidence.businessPermitPath,
     certificate_paths: evidence.certificatePaths,
     profile_photo_path: evidence.profilePhotoPath,
@@ -58,6 +70,16 @@ export async function getMechanicVerification(userId: string) {
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
+}
+
+export async function registerMechanicIdentityNumber(identityNumber: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.functions.invoke("register-verification-identity", {
+    body: { identityNumber },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(String(data.error));
+  return data as { registered: boolean };
 }
 
 export async function uploadMechanicVerificationImage(input: {
@@ -74,9 +96,6 @@ export async function uploadMechanicVerificationImage(input: {
 
   let arrayBuffer: ArrayBuffer;
   try {
-    // ImagePicker returns a local device URI (for example file:// or content://).
-    // Local URI responses do not reliably expose normal HTTP response status,
-    // so reading the bytes is the reliable success check on React Native.
     const response = await fetch(input.uri);
     arrayBuffer = await response.arrayBuffer();
   } catch {
@@ -106,7 +125,7 @@ export async function saveMechanicVerificationDraft(
   const { data: existing, error: lookupError } = await getMechanicVerification(userId);
   if (lookupError) throw lookupError;
 
-  const payload = verificationPayload(userId, checklist, evidence);
+  const payload = verificationPayload(userId, checklist, evidence) as any;
 
   if (existing) {
     return client
@@ -119,7 +138,7 @@ export async function saveMechanicVerificationDraft(
 
   return client
     .from("mechanic_verification_submissions")
-    .insert({ ...payload, status: "draft" })
+    .insert({ ...payload, status: "draft" } as any)
     .select()
     .single();
 }
@@ -136,7 +155,7 @@ export async function submitMechanicVerification(
   const payload = {
     ...verificationPayload(userId, checklist, evidence),
     status: "pending",
-  };
+  } as any;
 
   if (existing) {
     return client
