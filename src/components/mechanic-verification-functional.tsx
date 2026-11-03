@@ -2,13 +2,23 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useRepairFlow } from "@/context/repair-flow-context";
 import {
   getMechanicVerification,
+  registerMechanicIdentityNumber,
   saveMechanicVerificationDraft,
   submitMechanicVerification,
   uploadMechanicVerificationImage,
@@ -17,14 +27,32 @@ import {
   type VerificationImageKind,
 } from "@/services/mechanic-verification-backend";
 
-type EvidenceKey = "nationalId" | "businessPermit" | "certificates" | "profilePhoto";
+type EvidenceKey =
+  | "nationalIdFront"
+  | "nationalIdBack"
+  | "identitySelfie"
+  | "businessPermit"
+  | "certificates"
+  | "profilePhoto";
 type VerificationStatus = "not-submitted" | "draft" | "pending" | "approved" | "rejected";
 
 const emptyEvidence: MechanicVerificationEvidence = {
-  nationalIdPath: null,
+  nationalIdFrontPath: null,
+  nationalIdBackPath: null,
+  selfiePath: null,
   businessPermitPath: null,
   certificatePaths: [],
   profilePhotoPath: null,
+};
+
+const emptyChecklist: MechanicVerificationChecklist = {
+  identityClaimed: false,
+  nationalIdFront: false,
+  nationalIdBack: false,
+  identitySelfie: false,
+  businessPermit: false,
+  certificates: false,
+  profilePhoto: false,
 };
 
 export default function MechanicVerificationFunctional() {
@@ -33,13 +61,11 @@ export default function MechanicVerificationFunctional() {
   const { state, submitVerification, refreshBackend } = useRepairFlow();
   const providerType = profile?.provider_type === "garage" ? "garage" : "individual";
   const isGarage = providerType === "garage";
-  const [checklist, setChecklist] = useState<MechanicVerificationChecklist>({
-    nationalId: state.verificationItems.nationalId,
-    businessPermit: state.verificationItems.businessPermit,
-    certificates: state.verificationItems.certificates,
-    profilePhoto: state.verificationItems.profilePhoto,
-  });
+
+  const [checklist, setChecklist] = useState<MechanicVerificationChecklist>(emptyChecklist);
   const [evidence, setEvidence] = useState<MechanicVerificationEvidence>(emptyEvidence);
+  const [identityNumber, setIdentityNumber] = useState("");
+  const [registeringIdentity, setRegisteringIdentity] = useState(false);
   const [status, setStatus] = useState<VerificationStatus>(
     state.mechanicProfile.verified ? "approved" : "not-submitted",
   );
@@ -63,29 +89,40 @@ export default function MechanicVerificationFunctional() {
       if (requestError) throw requestError;
       if (!data) {
         setStatus(state.mechanicProfile.verified ? "approved" : "not-submitted");
+        setChecklist(emptyChecklist);
         setEvidence(emptyEvidence);
         return;
       }
 
+      const record = data as any;
+      const frontPath = record.national_id_front_path ?? record.national_id_path ?? null;
+      const backPath = record.national_id_back_path ?? null;
+      const selfiePath = record.selfie_path ?? null;
+
       setChecklist({
-        nationalId: data.national_id_confirmed,
-        businessPermit: data.business_permit_confirmed,
-        certificates: data.certificates_confirmed,
-        profilePhoto: data.profile_photo_confirmed,
+        identityClaimed: Boolean(record.identity_claimed),
+        nationalIdFront: Boolean(frontPath),
+        nationalIdBack: Boolean(backPath),
+        identitySelfie: Boolean(selfiePath),
+        businessPermit: Boolean(record.business_permit_confirmed && record.business_permit_path),
+        certificates: Boolean(record.certificates_confirmed && (record.certificate_paths?.length ?? 0) > 0),
+        profilePhoto: Boolean(record.profile_photo_confirmed && record.profile_photo_path),
       });
       setEvidence({
-        nationalIdPath: data.national_id_path,
-        businessPermitPath: data.business_permit_path,
-        certificatePaths: data.certificate_paths ?? [],
-        profilePhotoPath: data.profile_photo_path,
+        nationalIdFrontPath: frontPath,
+        nationalIdBackPath: backPath,
+        selfiePath,
+        businessPermitPath: record.business_permit_path,
+        certificatePaths: record.certificate_paths ?? [],
+        profilePhotoPath: record.profile_photo_path,
       });
-      setReviewNote(data.review_note);
+      setReviewNote(record.review_note);
       setStatus(
-        data.status === "approved"
+        record.status === "approved"
           ? "approved"
-          : data.status === "rejected"
+          : record.status === "rejected"
             ? "rejected"
-            : data.status === "pending"
+            : record.status === "pending"
               ? "pending"
               : "draft",
       );
@@ -100,16 +137,55 @@ export default function MechanicVerificationFunctional() {
     void loadStatus();
   }, [backendEnabled, user?.id]);
 
+  const registerIdentity = async () => {
+    if (!identityNumber.trim() || registeringIdentity || status === "pending" || status === "approved") return;
+    if (!backendEnabled) {
+      setChecklist((current) => ({ ...current, identityClaimed: true }));
+      setIdentityNumber("");
+      setStatus("draft");
+      return;
+    }
+
+    setRegisteringIdentity(true);
+    setError("");
+    try {
+      await registerMechanicIdentityNumber(identityNumber);
+      setChecklist((current) => ({ ...current, identityClaimed: true }));
+      setIdentityNumber("");
+      setStatus("draft");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to register this identity number.");
+    } finally {
+      setRegisteringIdentity(false);
+    }
+  };
+
   const uploadKindFor = (key: EvidenceKey): VerificationImageKind => {
     switch (key) {
-      case "nationalId":
-        return "national-id";
+      case "nationalIdFront":
+        return "national-id-front";
+      case "nationalIdBack":
+        return "national-id-back";
+      case "identitySelfie":
+        return "identity-selfie";
       case "businessPermit":
         return "business-permit";
       case "certificates":
         return "certificate";
       default:
         return "profile-photo";
+    }
+  };
+
+  const validateAsset = (key: EvidenceKey, asset: ImagePicker.ImagePickerAsset) => {
+    if (!asset.uri) throw new Error("The selected image could not be read.");
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      throw new Error("Verification images must be smaller than 10 MB.");
+    }
+    if (["nationalIdFront", "nationalIdBack", "businessPermit"].includes(key)) {
+      if ((asset.width ?? 0) < 500 || (asset.height ?? 0) < 300) {
+        throw new Error("The document image is too small to review clearly. Move closer and retake it in good light.");
+      }
     }
   };
 
@@ -132,7 +208,7 @@ export default function MechanicVerificationFunctional() {
       };
 
       for (const asset of assets) {
-        if (!asset.uri) continue;
+        validateAsset(key, asset);
         const { data, error: uploadError } = await uploadMechanicVerificationImage({
           userId: user.id,
           kind: uploadKindFor(key),
@@ -141,7 +217,9 @@ export default function MechanicVerificationFunctional() {
         });
         if (uploadError) throw uploadError;
 
-        if (key === "nationalId") nextEvidence.nationalIdPath = data.path;
+        if (key === "nationalIdFront") nextEvidence.nationalIdFrontPath = data.path;
+        if (key === "nationalIdBack") nextEvidence.nationalIdBackPath = data.path;
+        if (key === "identitySelfie") nextEvidence.selfiePath = data.path;
         if (key === "businessPermit") nextEvidence.businessPermitPath = data.path;
         if (key === "profilePhoto") nextEvidence.profilePhotoPath = data.path;
         if (key === "certificates" && !nextEvidence.certificatePaths.includes(data.path)) {
@@ -150,7 +228,10 @@ export default function MechanicVerificationFunctional() {
       }
 
       const nextChecklist: MechanicVerificationChecklist = {
-        nationalId: Boolean(nextEvidence.nationalIdPath),
+        identityClaimed: checklist.identityClaimed,
+        nationalIdFront: Boolean(nextEvidence.nationalIdFrontPath),
+        nationalIdBack: Boolean(nextEvidence.nationalIdBackPath),
+        identitySelfie: Boolean(nextEvidence.selfiePath),
         businessPermit: Boolean(nextEvidence.businessPermitPath),
         certificates: nextEvidence.certificatePaths.length > 0,
         profilePhoto: Boolean(nextEvidence.profilePhotoPath),
@@ -170,7 +251,7 @@ export default function MechanicVerificationFunctional() {
   };
 
   const chooseFromLibrary = async (key: EvidenceKey) => {
-    if (uploadingKey) return;
+    if (uploadingKey || key === "identitySelfie") return;
 
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -185,7 +266,7 @@ export default function MechanicVerificationFunctional() {
         allowsMultipleSelection: multipleCertificates,
         selectionLimit: multipleCertificates ? 5 : 1,
         allowsEditing: key === "profilePhoto" && !multipleCertificates,
-        quality: 0.85,
+        quality: 0.9,
         exif: false,
       });
 
@@ -197,6 +278,15 @@ export default function MechanicVerificationFunctional() {
   };
 
   const offerUploadFallback = (key: EvidenceKey, message: string) => {
+    if (key === "identitySelfie") {
+      Alert.alert(
+        "Live selfie required",
+        `${message} Identity verification requires a new selfie taken with the front camera. Please use a device with a working camera or contact AutoAssist support for manual verification.`,
+        [{ text: "OK" }],
+      );
+      return;
+    }
+
     Alert.alert(
       "Camera unavailable",
       `${message} You can upload an existing image instead.`,
@@ -217,14 +307,12 @@ export default function MechanicVerificationFunctional() {
         return;
       }
 
+      const isFrontCamera = key === "identitySelfie" || (key === "profilePhoto" && !isGarage);
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        cameraType:
-          key === "profilePhoto" && !isGarage
-            ? ImagePicker.CameraType.front
-            : ImagePicker.CameraType.back,
+        cameraType: isFrontCamera ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
         allowsEditing: key === "profilePhoto",
-        quality: 0.85,
+        quality: 0.9,
         exif: false,
       });
 
@@ -238,21 +326,32 @@ export default function MechanicVerificationFunctional() {
     }
   };
 
-  const identityReady = isGarage ? checklist.businessPermit : checklist.nationalId;
-  const allReady = identityReady && checklist.certificates && checklist.profilePhoto;
+  const allReady =
+    checklist.identityClaimed &&
+    checklist.nationalIdFront &&
+    checklist.nationalIdBack &&
+    checklist.identitySelfie &&
+    (!isGarage || checklist.businessPermit) &&
+    checklist.certificates &&
+    checklist.profilePhoto;
 
   const submit = async () => {
-    if (!allReady || loading || uploadingKey) return;
+    if (!allReady || loading || uploadingKey || registeringIdentity) return;
 
     const providerChecklist: MechanicVerificationChecklist = {
-      nationalId: isGarage ? false : checklist.nationalId,
+      identityClaimed: checklist.identityClaimed,
+      nationalIdFront: checklist.nationalIdFront,
+      nationalIdBack: checklist.nationalIdBack,
+      identitySelfie: checklist.identitySelfie,
       businessPermit: isGarage ? checklist.businessPermit : false,
       certificates: checklist.certificates,
       profilePhoto: checklist.profilePhoto,
     };
 
     const providerEvidence: MechanicVerificationEvidence = {
-      nationalIdPath: isGarage ? null : evidence.nationalIdPath,
+      nationalIdFrontPath: evidence.nationalIdFrontPath,
+      nationalIdBackPath: evidence.nationalIdBackPath,
+      selfiePath: evidence.selfiePath,
       businessPermitPath: isGarage ? evidence.businessPermitPath : null,
       certificatePaths: evidence.certificatePaths,
       profilePhotoPath: evidence.profilePhotoPath,
@@ -280,7 +379,7 @@ export default function MechanicVerificationFunctional() {
       if (submitError) throw submitError;
       setChecklist(providerChecklist);
       setEvidence(providerEvidence);
-      setStatus(data.status === "rejected" ? "rejected" : "pending");
+      setStatus((data as any).status === "rejected" ? "rejected" : "pending");
       submitVerification();
       await refreshBackend();
     } catch (caught) {
@@ -303,6 +402,7 @@ export default function MechanicVerificationFunctional() {
 
   const approved = state.mechanicProfile.verified || status === "approved";
   const locked = status === "pending" || approved;
+  const accountName = profile?.full_name?.trim() || "your AutoAssist account name";
 
   return (
     <View style={styles.screen}>
@@ -313,7 +413,7 @@ export default function MechanicVerificationFunctional() {
           </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.title}>{isGarage ? "Garage verification" : "Individual mechanic verification"}</Text>
-            <Text style={styles.subtitle}>Verification protects motorists and trusted service providers.</Text>
+            <Text style={styles.subtitle}>Identity evidence is reviewed before a provider can receive motorists.</Text>
           </View>
         </View>
 
@@ -331,7 +431,7 @@ export default function MechanicVerificationFunctional() {
               <SymbolView name="clock.fill" size={28} tintColor="#D98200" />
               <View style={styles.statusCopy}>
                 <Text style={styles.pendingTitle}>Verification under review</Text>
-                <Text style={styles.statusText}>Your verification has been submitted. AutoAssist must approve the provider before live jobs become available.</Text>
+                <Text style={styles.statusText}>A reviewer will check document validity, the account-name match, the live selfie against the ID portrait, certificates, and {isGarage ? "the business permit." : "the submitted identity evidence."}</Text>
               </View>
             </View>
           ) : status === "rejected" ? (
@@ -344,42 +444,95 @@ export default function MechanicVerificationFunctional() {
             </View>
           ) : (
             <View style={styles.introCard}>
-              <Text style={styles.introTitle}>{isGarage ? "Verify the garage/business" : "Verify your identity"}</Text>
-              <Text style={styles.introText}>
-                Tap each item to open the camera first. If the camera is unavailable or permission is denied, AutoAssist will offer an upload-from-device option.
-              </Text>
+              <Text style={styles.introTitle}>{isGarage ? "Verify the business and contact person" : "Verify your identity"}</Text>
+              <Text style={styles.introText}>Use clear, uncropped documents in good light. A random image can be uploaded, but it will not pass review: the document and person must match the account.</Text>
             </View>
           )}
+
+          {!locked ? (
+            <View style={styles.identityCard}>
+              <Text style={styles.identityTitle}>{isGarage ? "Contact person's National ID number" : "National ID number"}</Text>
+              <Text style={styles.identityHelp}>The number is used only to prevent duplicate mechanic identities. AutoAssist stores a one-way server fingerprint, not the plaintext number.</Text>
+              {checklist.identityClaimed ? (
+                <View style={styles.identityReadyRow}>
+                  <SymbolView name="checkmark.shield.fill" size={19} tintColor="#1B8A5A" />
+                  <Text style={styles.identityReadyText}>Identity number registered securely</Text>
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.identityInput}
+                    value={identityNumber}
+                    onChangeText={setIdentityNumber}
+                    placeholder="Enter National ID number"
+                    placeholderTextColor="#98A2B3"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    editable={!registeringIdentity}
+                  />
+                  <Pressable
+                    style={[styles.identityButton, (!identityNumber.trim() || registeringIdentity) && styles.disabled]}
+                    disabled={!identityNumber.trim() || registeringIdentity}
+                    onPress={() => void registerIdentity()}
+                  >
+                    {registeringIdentity ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.identityButtonText}>Register identity number</Text>}
+                  </Pressable>
+                </>
+              )}
+              <Text style={styles.nameMatchText}>The name printed on the ID should match: {accountName}</Text>
+            </View>
+          ) : null}
 
           <View style={styles.list}>
             {isGarage ? (
               <ChecklistCard
                 title="Business permit"
-                subtitle={checklist.businessPermit ? "Business permit image saved securely" : "Tap to scan or photograph the valid business permit"}
+                subtitle={checklist.businessPermit ? "Business permit image saved securely" : "Capture the valid permit showing the registered business details"}
                 checked={checklist.businessPermit}
                 uploading={uploadingKey === "businessPermit"}
                 onPress={() => void captureWithCamera("businessPermit")}
                 onUpload={() => void chooseFromLibrary("businessPermit")}
                 disabled={locked || Boolean(uploadingKey)}
               />
-            ) : (
-              <ChecklistCard
-                title="National ID"
-                subtitle={checklist.nationalId ? "National ID image saved securely" : "Tap to scan or photograph your National ID"}
-                checked={checklist.nationalId}
-                uploading={uploadingKey === "nationalId"}
-                onPress={() => void captureWithCamera("nationalId")}
-                onUpload={() => void chooseFromLibrary("nationalId")}
-                disabled={locked || Boolean(uploadingKey)}
-              />
-            )}
+            ) : null}
+
+            <ChecklistCard
+              title={isGarage ? "Contact person ID — front" : "National ID — front"}
+              subtitle={checklist.nationalIdFront ? "Front of ID saved securely" : "Capture the full front side with the portrait and printed details visible"}
+              checked={checklist.nationalIdFront}
+              uploading={uploadingKey === "nationalIdFront"}
+              onPress={() => void captureWithCamera("nationalIdFront")}
+              onUpload={() => void chooseFromLibrary("nationalIdFront")}
+              disabled={locked || Boolean(uploadingKey)}
+            />
+
+            <ChecklistCard
+              title={isGarage ? "Contact person ID — back" : "National ID — back"}
+              subtitle={checklist.nationalIdBack ? "Back of ID saved securely" : "Capture the entire back side clearly; do not crop the document edges"}
+              checked={checklist.nationalIdBack}
+              uploading={uploadingKey === "nationalIdBack"}
+              onPress={() => void captureWithCamera("nationalIdBack")}
+              onUpload={() => void chooseFromLibrary("nationalIdBack")}
+              disabled={locked || Boolean(uploadingKey)}
+            />
+
+            <ChecklistCard
+              title="Live identity selfie"
+              subtitle={checklist.identitySelfie ? "Fresh front-camera selfie saved securely" : "Take a new selfie now. Gallery upload is disabled for identity selfies."}
+              checked={checklist.identitySelfie}
+              uploading={uploadingKey === "identitySelfie"}
+              onPress={() => void captureWithCamera("identitySelfie")}
+              onUpload={() => {}}
+              disabled={locked || Boolean(uploadingKey)}
+              allowUpload={false}
+            />
 
             <ChecklistCard
               title="Skill certificates"
               subtitle={
                 evidence.certificatePaths.length > 0
                   ? `${evidence.certificatePaths.length} certificate image${evidence.certificatePaths.length === 1 ? "" : "s"} saved • Tap again to add another`
-                  : "Tap to photograph a certificate; upload can select up to 5 images"
+                  : "Photograph a certificate or upload up to 5 clear certificate images"
               }
               checked={checklist.certificates}
               uploading={uploadingKey === "certificates"}
@@ -389,13 +542,13 @@ export default function MechanicVerificationFunctional() {
             />
 
             <ChecklistCard
-              title={isGarage ? "Business / profile photo" : "Profile photo"}
+              title={isGarage ? "Garage / business profile photo" : "Professional profile photo"}
               subtitle={
                 checklist.profilePhoto
                   ? "Profile image saved securely"
                   : isGarage
-                    ? "Tap to photograph the garage or professional business profile"
-                    : "Tap to take a clear professional profile photo"
+                    ? "Photograph the garage or business frontage/profile"
+                    : "Take a clear professional profile photo"
               }
               checked={checklist.profilePhoto}
               uploading={uploadingKey === "profilePhoto"}
@@ -406,7 +559,18 @@ export default function MechanicVerificationFunctional() {
           </View>
 
           {!locked ? (
-            <Text style={styles.privacyNote}>Verification images are private and stored under your AutoAssist account for review.</Text>
+            <View style={styles.reviewInfoCard}>
+              <Text style={styles.reviewInfoTitle}>What AutoAssist will verify</Text>
+              <Text style={styles.reviewInfoText}>• The submission looks like a valid identity document, not a random photo.</Text>
+              <Text style={styles.reviewInfoText}>• The ID name matches the mechanic account name.</Text>
+              <Text style={styles.reviewInfoText}>• The fresh selfie visually matches the portrait on the ID.</Text>
+              <Text style={styles.reviewInfoText}>• Skill certificates appear relevant and authentic.</Text>
+              {isGarage ? <Text style={styles.reviewInfoText}>• The business permit matches the garage/business details.</Text> : null}
+            </View>
+          ) : null}
+
+          {!locked ? (
+            <Text style={styles.privacyNote}>Verification images are private and stored under your AutoAssist account for review. A document upload alone never verifies a provider.</Text>
           ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -420,7 +584,11 @@ export default function MechanicVerificationFunctional() {
               <Text style={styles.secondaryText}>Refresh verification status</Text>
             </Pressable>
           ) : (
-            <Pressable disabled={!allReady || loading || Boolean(uploadingKey)} style={[styles.primaryButton, (!allReady || loading || Boolean(uploadingKey)) && styles.disabled]} onPress={() => void submit()}>
+            <Pressable
+              disabled={!allReady || loading || Boolean(uploadingKey) || registeringIdentity}
+              style={[styles.primaryButton, (!allReady || loading || Boolean(uploadingKey) || registeringIdentity) && styles.disabled]}
+              onPress={() => void submit()}
+            >
               {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{status === "rejected" ? "Resubmit verification" : "Submit verification"}</Text>}
             </Pressable>
           )}
@@ -444,6 +612,7 @@ function ChecklistCard({
   onPress,
   onUpload,
   disabled,
+  allowUpload = true,
 }: {
   title: string;
   subtitle: string;
@@ -452,6 +621,7 @@ function ChecklistCard({
   onPress: () => void;
   onUpload: () => void;
   disabled: boolean;
+  allowUpload?: boolean;
 }) {
   return (
     <View style={[styles.checkCard, checked && styles.checkCardReady]}>
@@ -469,7 +639,7 @@ function ChecklistCard({
         </View>
         <Text style={[styles.checkStatus, checked && styles.checkStatusReady]}>{uploading ? "SAVING" : checked ? "READY" : "CAMERA"}</Text>
       </Pressable>
-      {!disabled && !uploading ? (
+      {allowUpload && !disabled && !uploading ? (
         <Pressable onPress={onUpload} style={styles.uploadFallbackButton}>
           <SymbolView name="photo.on.rectangle" size={14} tintColor="#1857A6" />
           <Text style={styles.uploadFallbackText}>Upload instead</Text>
@@ -491,7 +661,7 @@ const styles = StyleSheet.create({
   title: { color: "#102A43", fontSize: 19, fontFamily: "Inter_600SemiBold" },
   subtitle: { color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 4 },
   content: { padding: 20, paddingBottom: 34 },
-  introCard: { padding: 15, borderRadius: 14, backgroundColor: "#EAF2FD", borderWidth: 1, borderColor: "#B8D2F0", marginBottom: 18 },
+  introCard: { padding: 15, borderRadius: 14, backgroundColor: "#EAF2FD", borderWidth: 1, borderColor: "#B8D2F0", marginBottom: 14 },
   introTitle: { color: "#1857A6", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   introText: { color: "#475467", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular", marginTop: 5 },
   statusCard: { flexDirection: "row", gap: 12, padding: 15, borderRadius: 14, borderWidth: 1, marginBottom: 18 },
@@ -503,6 +673,15 @@ const styles = StyleSheet.create({
   pendingTitle: { color: "#B26B00", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   rejectedTitle: { color: "#D9363E", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   statusText: { color: "#475467", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular", marginTop: 4 },
+  identityCard: { borderRadius: 14, borderWidth: 1, borderColor: "#D6E4F5", backgroundColor: "#F8FBFF", padding: 14, marginBottom: 14 },
+  identityTitle: { color: "#102A43", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  identityHelp: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 4 },
+  identityInput: { minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 12, color: "#102A43", fontSize: 13, fontFamily: "Inter_400Regular", backgroundColor: "#FFFFFF", marginTop: 12 },
+  identityButton: { minHeight: 43, borderRadius: 10, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 8 },
+  identityButtonText: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  identityReadyRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: "#EAF7F1" },
+  identityReadyText: { color: "#1B8A5A", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  nameMatchText: { color: "#475467", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 9 },
   list: { gap: 10 },
   checkCard: { borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 13, backgroundColor: "#FFFFFF", overflow: "hidden" },
   checkCardReady: { borderColor: "#B7DFC9", backgroundColor: "#F7FCF9" },
@@ -516,6 +695,9 @@ const styles = StyleSheet.create({
   checkStatusReady: { color: "#1B8A5A" },
   uploadFallbackButton: { minHeight: 36, borderTopWidth: 1, borderTopColor: "#EAECF0", flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", backgroundColor: "#FAFCFF" },
   uploadFallbackText: { color: "#1857A6", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  reviewInfoCard: { marginTop: 14, borderRadius: 13, borderWidth: 1, borderColor: "#E4E7EC", padding: 13, backgroundColor: "#FCFCFD" },
+  reviewInfoTitle: { color: "#102A43", fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 5 },
+  reviewInfoText: { color: "#667085", fontSize: 10, lineHeight: 16, fontFamily: "Inter_400Regular" },
   privacyNote: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 12, textAlign: "center" },
   error: { color: "#D9363E", backgroundColor: "#FFF1F2", padding: 10, borderRadius: 10, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 14 },
   primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 20 },
