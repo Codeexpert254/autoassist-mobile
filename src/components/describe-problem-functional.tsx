@@ -110,9 +110,11 @@ export default function DescribeProblemFunctional() {
       symptom,
       location: locationText.trim(),
       preferredTime: preferredTime.trim() || "As soon as possible",
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
     });
 
-    router.push("/motorist/mechanic-results");
+    router.push("/motorist/dispatch-status");
   };
 
   const manualLocationEnabled =
@@ -181,7 +183,7 @@ export default function DescribeProblemFunctional() {
             <View style={styles.locationTitleWrap}>
               <Text style={styles.label}>Current location</Text>
               <Text style={styles.helperText}>
-                AutoAssist uses your location to find nearby mechanics.
+                AutoAssist uses your location to dispatch a nearby verified mechanic.
               </Text>
             </View>
             {locationState === "detected" ? (
@@ -226,7 +228,10 @@ export default function DescribeProblemFunctional() {
               <TextInput
                 style={styles.input}
                 value={locationText}
-                onChangeText={setLocationText}
+                onChangeText={(value) => {
+                  setLocationText(value);
+                  setCoordinates(null);
+                }}
                 placeholder="Enter your location, e.g. Westlands, Nairobi"
                 placeholderTextColor="#98A2B3"
               />
@@ -259,9 +264,7 @@ export default function DescribeProblemFunctional() {
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>What happens next?</Text>
             <Text style={styles.infoText}>
-              {state.vehicleSaved
-                ? "We will use the problem, vehicle and location details to show matching nearby mechanics. The final diagnosis and price will come after a mechanic inspects the vehicle."
-                : "We will use the problem and location details to show matching nearby mechanics. You can add vehicle details later for more precise matching. The final diagnosis and price will come after a mechanic inspects the vehicle."}
+              AutoAssist will rank verified, available mechanics using service fit, distance, ratings and reliability, then notify the strongest match. You only pay the KES 500 connection fee after a mechanic accepts your request.
             </Text>
           </View>
 
@@ -274,7 +277,7 @@ export default function DescribeProblemFunctional() {
             onPress={handleFindMechanics}
             style={[styles.primaryButton, !valid && styles.primaryButtonDisabled]}
           >
-            <Text style={styles.primaryButtonText}>Find matching mechanics</Text>
+            <Text style={styles.primaryButtonText}>Find suitable help</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -283,13 +286,8 @@ export default function DescribeProblemFunctional() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  safeArea: {
-    flex: 1,
-  },
+  screen: { flex: 1, backgroundColor: "#FFFFFF" },
+  safeArea: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -299,44 +297,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#EAECF0",
   },
-  backButton: {
-    width: 34,
-    minHeight: 38,
-    justifyContent: "center",
-  },
-  backText: {
-    color: "#102A43",
-    fontSize: 28,
-    lineHeight: 32,
-    fontFamily: "Inter_600SemiBold",
-  },
-  headerCopy: {
-    flex: 1,
-  },
-  title: {
-    color: "#102A43",
-    fontSize: 19,
-    fontFamily: "Inter_600SemiBold",
-  },
-  subtitle: {
-    marginTop: 5,
-    color: "#667085",
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: "Inter_400Regular",
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-  },
-  label: {
-    color: "#344054",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    marginBottom: 6,
-  },
+  backButton: { width: 34, minHeight: 38, justifyContent: "center" },
+  backText: { color: "#102A43", fontSize: 28, lineHeight: 32, fontFamily: "Inter_600SemiBold" },
+  headerCopy: { flex: 1 },
+  title: { color: "#102A43", fontSize: 19, fontFamily: "Inter_600SemiBold" },
+  subtitle: { marginTop: 5, color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
+  scroll: { flex: 1 },
+  content: { padding: 20 },
+  label: { color: "#344054", fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 6 },
   input: {
     minHeight: 52,
     borderWidth: 1,
@@ -348,18 +316,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },
-  multilineInput: {
-    minHeight: 112,
-    paddingTop: 14,
-    paddingBottom: 14,
-    marginBottom: 22,
-  },
-  choiceWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 24,
-  },
+  multilineInput: { minHeight: 112, paddingTop: 14, paddingBottom: 14, marginBottom: 22 },
+  choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   choice: {
     minHeight: 38,
     paddingHorizontal: 15,
@@ -370,40 +328,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
   },
-  choiceActive: {
-    borderColor: "#1857A6",
-    backgroundColor: "#EAF2FD",
-  },
-  choiceText: {
-    color: "#667085",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  choiceTextActive: {
-    color: "#1857A6",
-  },
-  locationHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  locationTitleWrap: {
-    flex: 1,
-  },
-  helperText: {
-    marginTop: -2,
-    marginBottom: 10,
-    color: "#667085",
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: "Inter_400Regular",
-  },
-  editText: {
-    color: "#1857A6",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
+  choiceActive: { borderColor: "#1857A6", backgroundColor: "#EAF2FD" },
+  choiceText: { color: "#667085", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  choiceTextActive: { color: "#1857A6" },
+  locationHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  locationTitleWrap: { flex: 1 },
+  helperText: { marginTop: -2, marginBottom: 10, color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
+  editText: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   locationCard: {
     minHeight: 82,
     flexDirection: "row",
@@ -415,122 +346,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#F7FAFE",
   },
-  locationCardDetected: {
-    borderColor: "#B7DFC9",
-    backgroundColor: "#F2FAF6",
-  },
-  pinCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#EAF7F1",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pinText: {
-    color: "#1B8A5A",
-    fontSize: 15,
-  },
-  locationCopy: {
-    flex: 1,
-  },
-  locationTitle: {
-    color: "#102A43",
-    fontSize: 13,
-    lineHeight: 18,
-    fontFamily: "Inter_600SemiBold",
-  },
-  locationMeta: {
-    marginTop: 5,
-    color: "#667085",
-    fontSize: 10,
-    lineHeight: 15,
-    fontFamily: "Inter_400Regular",
-  },
-  locationErrorCard: {
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#F3C5C9",
-    borderRadius: 10,
-    backgroundColor: "#FFF1F2",
-  },
-  locationErrorText: {
-    color: "#A12830",
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: "Inter_400Regular",
-  },
-  locationActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginTop: 10,
-    marginBottom: 24,
-  },
-  locationButton: {
-    minHeight: 38,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "#1857A6",
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locationButtonText: {
-    color: "#1857A6",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-  },
-  manualHint: {
-    color: "#667085",
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-  },
-  preferredTimeLabel: {
-    marginTop: 2,
-  },
-  infoCard: {
-    marginTop: 22,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-  },
-  infoTitle: {
-    color: "#102A43",
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-  },
-  infoText: {
-    marginTop: 6,
-    color: "#667085",
-    fontSize: 11,
-    lineHeight: 17,
-    fontFamily: "Inter_400Regular",
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#EAECF0",
-    backgroundColor: "#FFFFFF",
-  },
-  primaryButton: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: "#1857A6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryButtonDisabled: {
-    backgroundColor: "#A9C2DF",
-  },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  locationCardDetected: { borderColor: "#B7DFC9", backgroundColor: "#F2FAF6" },
+  pinCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#EAF7F1", alignItems: "center", justifyContent: "center" },
+  pinText: { color: "#1B8A5A", fontSize: 15 },
+  locationCopy: { flex: 1 },
+  locationTitle: { color: "#102A43", fontSize: 13, lineHeight: 18, fontFamily: "Inter_600SemiBold" },
+  locationMeta: { marginTop: 5, color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular" },
+  locationErrorCard: { padding: 12, marginBottom: 10, borderWidth: 1, borderColor: "#F3C5C9", borderRadius: 10, backgroundColor: "#FFF1F2" },
+  locationErrorText: { color: "#A12830", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular" },
+  locationActions: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10, marginBottom: 24 },
+  locationButton: { minHeight: 38, paddingHorizontal: 14, borderWidth: 1, borderColor: "#1857A6", borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  locationButtonText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  manualHint: { color: "#667085", fontSize: 10, fontFamily: "Inter_400Regular" },
+  preferredTimeLabel: { marginTop: 2 },
+  infoCard: { marginTop: 22, padding: 14, borderRadius: 12, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E4E7EC" },
+  infoTitle: { color: "#102A43", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  infoText: { marginTop: 6, color: "#667085", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular" },
+  footer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: "#EAECF0", backgroundColor: "#FFFFFF" },
+  primaryButton: { minHeight: 48, borderRadius: 12, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center" },
+  primaryButtonDisabled: { backgroundColor: "#A9C2DF" },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });
