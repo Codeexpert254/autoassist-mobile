@@ -1,3 +1,5 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
+
 import { requireSupabase } from "@/lib/supabase";
 
 export type MechanicVerificationChecklist = {
@@ -64,6 +66,22 @@ export async function getMechanicVerification(userId: string) {
     .maybeSingle();
 }
 
+async function functionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json();
+      if (payload && typeof payload === "object" && "error" in payload) {
+        const message = String((payload as { error?: unknown }).error ?? "").trim();
+        if (message) return message;
+      }
+    } catch {
+      // Fall through to the SDK's generic message when the response body is unavailable.
+    }
+  }
+
+  return error instanceof Error ? error.message : "Unable to contact the verification service.";
+}
+
 /**
  * Registers an Individual Mechanic's claimed National ID number privately.
  * The Edge Function normalizes the number and stores only a one-way HMAC
@@ -74,7 +92,7 @@ export async function registerMechanicIdentityNumber(identityNumber: string) {
   const { data, error } = await client.functions.invoke("register-verification-identity", {
     body: { identityNumber },
   });
-  if (error) throw error;
+  if (error) throw new Error(await functionErrorMessage(error));
   if (data?.error) throw new Error(String(data.error));
   return data as { registered: boolean };
 }
