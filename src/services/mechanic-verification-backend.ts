@@ -21,6 +21,7 @@ export type VerificationImageKind =
   | "profile-photo";
 
 const VERIFICATION_BUCKET = "mechanic-verification";
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function extensionForMimeType(mimeType?: string | null) {
   switch (mimeType) {
@@ -66,12 +67,26 @@ export async function uploadMechanicVerificationImage(input: {
   mimeType?: string | null;
 }) {
   const client = requireSupabase();
-  const response = await fetch(input.uri);
-  if (!response.ok) {
-    throw new Error("Unable to read the selected image from this device.");
+
+  if (input.mimeType && !ALLOWED_IMAGE_MIME_TYPES.has(input.mimeType)) {
+    throw new Error("Only JPEG, PNG, or WebP verification images are supported.");
   }
 
-  const arrayBuffer = await response.arrayBuffer();
+  let arrayBuffer: ArrayBuffer;
+  try {
+    // ImagePicker returns a local device URI (for example file:// or content://).
+    // Local URI responses do not reliably expose normal HTTP response status,
+    // so reading the bytes is the reliable success check on React Native.
+    const response = await fetch(input.uri);
+    arrayBuffer = await response.arrayBuffer();
+  } catch {
+    throw new Error("Unable to read the selected image from this device. Please retake it or choose another image.");
+  }
+
+  if (!arrayBuffer.byteLength) {
+    throw new Error("The selected verification image is empty. Please retake it or choose another image.");
+  }
+
   const extension = extensionForMimeType(input.mimeType);
   const suffix = Math.random().toString(36).slice(2, 10);
   const path = `${input.userId}/${input.kind}/${Date.now()}-${suffix}.${extension}`;
