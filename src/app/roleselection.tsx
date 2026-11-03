@@ -61,10 +61,10 @@ export default function RoleSelection() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.eyebrow}>GET STARTED</Text>
-            <Text style={styles.title}>How do you want to use AutoAssist?</Text>
+            <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
+            <Text style={styles.title}>Choose your account type</Text>
             <Text style={styles.subTitle}>
-              Choose your account type. We’ll take you straight to account creation.
+              Select how you want to use AutoAssist, then continue to account creation.
             </Text>
           </View>
 
