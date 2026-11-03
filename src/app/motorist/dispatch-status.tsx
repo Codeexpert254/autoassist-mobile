@@ -19,7 +19,7 @@ export default function DispatchStatus() {
   const params = useLocalSearchParams<{ requestId?: string }>();
   const parameterRequestId = Array.isArray(params.requestId) ? params.requestId[0] : params.requestId;
   const { backendEnabled, user, profile } = useAuth();
-  const { state } = useRepairFlow();
+  const { state, refreshBackend } = useRepairFlow();
   const creatingRef = useRef(false);
 
   const [requestId, setRequestId] = useState<string | null>(parameterRequestId ?? null);
@@ -58,6 +58,11 @@ export default function DispatchStatus() {
       setRequestId(result.data.id);
       setRequest(result.data);
       setDispatchMessage("Finding the best verified mechanic for you…");
+
+      // Keep the shared repair context attached to the same live request so the
+      // existing inspection/quote/history lifecycle continues from this dispatch.
+      await refreshBackend();
+
       return result.data.id as string;
     } finally {
       creatingRef.current = false;
