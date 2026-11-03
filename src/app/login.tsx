@@ -154,15 +154,6 @@ export default function Login() {
     }
   };
 
-  const createAccount = () => {
-    if (loginRole === "mechanic") {
-      router.push("/mechanic/account-type");
-      return;
-    }
-
-    router.push({ pathname: "/register", params: { role: loginRole } });
-  };
-
   return (
     <View style={styles.loginContainer}>
       <SafeAreaView style={styles.safeArea}>
@@ -290,12 +281,8 @@ export default function Login() {
             <View style={styles.dividerLine} />
           </View>
 
-          <Pressable style={[styles.input, styles.createAccountButton]} onPress={createAccount}>
-            <Text style={styles.createAccount}>Create a new {roleLabels[loginRole]} account</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push("/roleselection")}>
-            <Text style={styles.allRolesLink}>View all account types</Text>
+          <Pressable style={[styles.input, styles.createAccountButton]} onPress={() => router.push("/roleselection")}>
+            <Text style={styles.createAccount}>Create account</Text>
           </Pressable>
 
           <Text style={styles.termsOfService}>
@@ -349,9 +336,8 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: "row", marginBottom: 20, alignItems: "center" },
   dividerLine: { backgroundColor: "#D0D5DD", flex: 1, height: 1 },
   orText: { marginHorizontal: 12, fontFamily: "Inter_400Regular", fontSize: 12, color: "#667085" },
-  createAccountButton: { alignItems: "center", marginBottom: 12 },
+  createAccountButton: { alignItems: "center", marginBottom: 24 },
   createAccount: { color: "#102A43", fontFamily: "Inter_600SemiBold", fontSize: 13, textAlign: "center" },
-  allRolesLink: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11, textAlign: "center", marginBottom: 24 },
   termsOfService: { width: 310, alignSelf: "center", textAlign: "center", fontFamily: "Inter_600SemiBold", fontSize: 11, color: "#667085" },
   devPreviewButton: { alignSelf: "center", marginTop: 20, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#EAF2FD" },
   devPreviewText: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11 },
