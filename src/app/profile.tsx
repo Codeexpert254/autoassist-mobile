@@ -1,47 +1,20 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
-import { getAdminVerificationStatus } from "@/services/admin-verification-backend";
 
 export default function Profile() {
   const router = useRouter();
   const { backendEnabled, user, profile, signOut } = useAuth();
   const { state, logout: demoLogout } = useDemoApp();
-  const [isVerificationAdmin, setIsVerificationAdmin] = useState(false);
 
   const displayName = profile?.full_name || state.user.name;
   const displayPhone = profile?.phone || state.user.phone;
   const displayEmail = user?.email || state.user.email;
   const displayRole = profile?.role === "mechanic" ? "Mechanic" : "Motorist";
-
-  useEffect(() => {
-    let active = true;
-
-    const checkAdminAccess = async () => {
-      if (!backendEnabled || !user) {
-        if (active) setIsVerificationAdmin(false);
-        return;
-      }
-
-      try {
-        const result = await getAdminVerificationStatus();
-        if (active) setIsVerificationAdmin(result.isAdmin === true);
-      } catch {
-        // Admin access is intentionally silent for ordinary accounts.
-        if (active) setIsVerificationAdmin(false);
-      }
-    };
-
-    void checkAdminAccess();
-    return () => {
-      active = false;
-    };
-  }, [backendEnabled, user?.id]);
 
   const handleLogout = async () => {
     try {
@@ -74,17 +47,6 @@ export default function Profile() {
             <Text style={styles.identityMeta}>{displayRole} • {backendEnabled ? "Live account" : "Developer Preview"}</Text>
           </View>
         </View>
-
-        {isVerificationAdmin ? (
-          <View style={styles.adminSection}>
-            <Text style={styles.adminEyebrow}>ADMIN ACCESS</Text>
-            <SettingCard
-              title="Mechanic verification admin"
-              subtitle="Review pending applications, documents and approval decisions"
-              onPress={() => router.push("/admin/verification-queue")}
-            />
-          </View>
-        ) : null}
 
         <SettingCard title="Personal information" subtitle={displayName} onPress={() => {}} />
         <SettingCard title="Wallet & transactions" subtitle="View payments and service transactions" onPress={() => router.push("/wallet")} />
@@ -126,8 +88,6 @@ const styles = StyleSheet.create({
   identityCopy: { flex: 1 },
   identityName: { color: "#FFFFFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   identityMeta: { color: "#DCE9F8", fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 4 },
-  adminSection: { marginBottom: 10 },
-  adminEyebrow: { color: "#1857A6", fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 6 },
   card: { minHeight: 68, borderRadius: 12, borderWidth: 1, borderColor: "#E4E7EC", backgroundColor: "#FFFFFF", paddingHorizontal: 14, flexDirection: "row", alignItems: "center", marginBottom: 8 },
   cardCopy: { flex: 1, gap: 4 },
   cardTitle: { color: "#102A43", fontSize: 13, fontFamily: "Inter_600SemiBold" },

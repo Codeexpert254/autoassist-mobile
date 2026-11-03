@@ -1,16 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
+};
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 
 const BUCKET = "mechanic-verification";
 const SIGNED_URL_TTL_SECONDS = 300;
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -29,19 +43,23 @@ Deno.serve(async (req) => {
   if (authError || !authData.user) return json({ error: "Unauthorized" }, 401);
 
   const reviewerId = authData.user.id;
-  const { data: isAdmin, error: adminError } = await service.rpc("is_verification_admin", {
+  const { data: adminRole, error: adminError } = await service.rpc("get_autoassist_admin_role", {
     p_user_id: reviewerId,
   });
   if (adminError) {
     console.error("Admin lookup failed", { code: adminError.code, message: adminError.message });
     return json({ error: "Unable to verify admin access" }, 500);
   }
-  if (isAdmin !== true) return json({ error: "Admin access required" }, 403);
+  if (!adminRole) return json({ error: "Admin access required" }, 403);
 
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "");
 
-  if (action === "status") return json({ isAdmin: true });
+  if (action === "status") return json({ isAdmin: true, role: adminRole });
+
+  if (!["super_admin", "verification_admin"].includes(String(adminRole))) {
+    return json({ error: "Verification admin access required" }, 403);
+  }
 
   if (action === "list") {
     const requestedStatus = String(body.status ?? "pending");

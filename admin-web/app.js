@@ -1,0 +1,366 @@
+import { createClient, FunctionsHttpError } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm";
+
+const cfg = window.AUTOASSIST_CONFIG ?? {};
+const loginView = document.querySelector("#login-view");
+const adminView = document.querySelector("#admin-view");
+const content = document.querySelector("#content");
+const title = document.querySelector("#page-title");
+const roleBadge = document.querySelector("#admin-role");
+const loginForm = document.querySelector("#login-form");
+const loginError = document.querySelector("#login-error");
+const loginButton = document.querySelector("#login-button");
+
+const state = {
+  section: "overview",
+  role: null,
+  verificationFilter: "pending",
+  selectedVerification: null,
+};
+
+const configured = Boolean(cfg.supabaseUrl && cfg.supabasePublishableKey);
+const supabase = configured
+  ? createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    })
+  : null;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function formatKES(value) {
+  return new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(Number(value ?? 0));
+}
+
+function statusClass(value) {
+  const status = String(value ?? "default").toLowerCase();
+  return ["pending","approved","rejected","draft","matching","paid","completed","failed"].includes(status) ? status : "default";
+}
+
+async function functionMessage(error) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json();
+      if (payload?.error) return String(payload.error);
+    } catch {}
+  }
+  return error instanceof Error ? error.message : "Request failed.";
+}
+
+async function invoke(name, body) {
+  if (!supabase) throw new Error("Admin configuration is missing.");
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) throw new Error(await functionMessage(error));
+  if (data?.error) throw new Error(String(data.error));
+  return data;
+}
+
+function showLogin(message = "") {
+  adminView.hidden = true;
+  loginView.hidden = false;
+  if (message) {
+    loginError.textContent = message;
+    loginError.hidden = false;
+  }
+}
+
+function showAdmin() {
+  loginView.hidden = true;
+  adminView.hidden = false;
+  roleBadge.textContent = String(state.role ?? "admin").replaceAll("_", " ");
+}
+
+function setLoading(message = "Loading…") {
+  content.innerHTML = `<div class="loading">${escapeHtml(message)}</div>`;
+}
+
+function setError(message) {
+  content.innerHTML = `<div class="notice warning"><strong>Unable to load this section.</strong><br>${escapeHtml(message)}</div>`;
+}
+
+async function authorize() {
+  const status = await invoke("admin-core", { action: "status" });
+  state.role = status.role;
+  showAdmin();
+  await navigate("overview");
+}
+
+async function restore() {
+  if (!configured) {
+    showLogin("Missing admin-web/config.js. Copy config.example.js to config.js and add the Supabase publishable key.");
+    return;
+  }
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return showLogin(error.message);
+  if (!data.session) return showLogin();
+  try {
+    await authorize();
+  } catch (error) {
+    await supabase.auth.signOut();
+    showLogin(error.message === "Admin access required" ? "This account is not authorized for AutoAssist Admin." : error.message);
+  }
+}
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginError.hidden = true;
+  if (!supabase) return showLogin("Admin configuration is missing.");
+  loginButton.disabled = true;
+  loginButton.textContent = "Signing in…";
+  try {
+    const email = document.querySelector("#login-email").value.trim();
+    const password = document.querySelector("#login-password").value;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await authorize();
+  } catch (error) {
+    loginError.textContent = error.message ?? "Unable to sign in.";
+    loginError.hidden = false;
+  } finally {
+    loginButton.disabled = false;
+    loginButton.textContent = "Sign in";
+  }
+});
+
+document.querySelector("#logout-button").addEventListener("click", async () => {
+  await supabase?.auth.signOut();
+  state.role = null;
+  state.selectedVerification = null;
+  showLogin();
+});
+
+document.querySelector("#sidebar-nav").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-section]");
+  if (button) void navigate(button.dataset.section);
+});
+
+async function navigate(section) {
+  state.section = section;
+  state.selectedVerification = null;
+  document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.section === section));
+  const labels = {
+    overview: "Overview",
+    verification: "Mechanic verification",
+    users: "Users",
+    jobs: "Live repair jobs",
+    orders: "Orders",
+    payments: "Connection payments",
+    support: "Support & disputes",
+    analytics: "Analytics",
+    settings: "Admin settings",
+  };
+  title.textContent = labels[section] ?? "AutoAssist Admin";
+  setLoading();
+  try {
+    if (section === "overview") return await renderOverview();
+    if (section === "verification") return await renderVerificationList();
+    if (section === "users") return await renderUsers();
+    if (section === "jobs") return await renderJobs();
+    if (section === "payments") return await renderPayments();
+    if (section === "analytics") return await renderAnalytics();
+    if (section === "settings") return renderSettings();
+    if (section === "orders") return renderNotConnected("Orders", "Parts/order persistence is not live in the current backend yet. This screen is isolated and ready to connect when the order tables are implemented.");
+    if (section === "support") return renderNotConnected("Support & disputes", "A production support/dispute table is not present yet. This screen will connect once those records are persisted in Supabase.");
+  } catch (error) {
+    setError(error.message ?? "Unknown error");
+  }
+}
+
+async function renderOverview() {
+  const data = await invoke("admin-core", { action: "overview" });
+  const m = data.metrics;
+  const pending = m.requestCounts?.pending ?? m.requestCounts?.matching ?? 0;
+  content.innerHTML = `
+    <div class="metric-grid">
+      ${metric("Total users", m.totalUsers, `${m.roleCounts?.mechanic ?? 0} mechanics`)}
+      ${metric("Verified mechanics", m.verifiedMechanics, `${m.availableMechanics} currently available`)}
+      ${metric("Repair requests", m.repairRequests, `${pending} active/matching`)}
+      ${metric("Paid connection fees", formatKES(m.paidConnectionFees), `${m.connectionPayments} payment records`)}
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3 class="panel-title">Live system summary</h3><span class="status approved">${escapeHtml(state.role)}</span></div>
+      <div class="info-grid">
+        ${info("Motorists", m.roleCounts?.motorist ?? 0)}
+        ${info("Mechanics", m.roleCounts?.mechanic ?? 0)}
+        ${info("Ratings", m.ratings)}
+        ${info("Average rating", m.averageRating || "—")}
+      </div>
+    </div>
+    <div class="panel"><div class="panel-header"><h3 class="panel-title">Recent repair activity</h3></div>${renderRequestCards(data.recentRequests ?? [])}</div>
+  `;
+}
+
+function metric(label, value, meta = "") {
+  return `<div class="metric-card"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(value)}</div><div class="metric-meta">${escapeHtml(meta)}</div></div>`;
+}
+function info(label, value) {
+  return `<div class="info-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+async function renderVerificationList() {
+  const data = await invoke("admin-verification", { action: "list", status: state.verificationFilter });
+  const items = data.items ?? [];
+  content.innerHTML = `
+    <div class="panel">
+      <div class="panel-header"><div><h3 class="panel-title">Mechanic applications</h3><p class="muted">Open an application to inspect private documents and make the review decision.</p></div>
+      <div class="toolbar">${["pending","approved","rejected","all"].map((item) => `<button class="filter-button ${state.verificationFilter===item?"active":""}" data-filter="${item}">${item}</button>`).join("")}</div></div>
+      <div class="list">${items.length ? items.map((item) => verificationCard(item)).join("") : `<div class="empty">No ${escapeHtml(state.verificationFilter)} applications.</div>`}</div>
+    </div>`;
+  content.querySelectorAll("[data-filter]").forEach((button) => button.addEventListener("click", () => {
+    state.verificationFilter = button.dataset.filter;
+    void renderVerificationList();
+  }));
+  content.querySelectorAll("[data-verification-id]").forEach((button) => button.addEventListener("click", () => void renderVerificationDetail(button.dataset.verificationId)));
+}
+
+function verificationCard(item) {
+  const profile = item.profile ?? {};
+  const provider = profile.provider_type === "garage" ? "Garage / business" : "Individual mechanic";
+  return `<button class="list-card clickable" data-verification-id="${escapeHtml(item.user_id)}" style="width:100%;text-align:left">
+    <div><div class="list-title">${escapeHtml(profile.full_name || item.mechanic?.garage_name || "Unnamed mechanic")}</div>
+    <div class="list-subtitle">${escapeHtml(provider)} • ${escapeHtml(item.mechanic?.location || "Location not provided")}<br>Submitted ${escapeHtml(formatDate(item.submitted_at))}</div></div>
+    <span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span>
+  </button>`;
+}
+
+async function renderVerificationDetail(userId) {
+  setLoading("Loading private verification evidence…");
+  try {
+    const data = await invoke("admin-verification", { action: "detail", userId });
+    state.selectedVerification = data;
+    const individual = data.profile.provider_type !== "garage";
+    const storedId = data.identityNumberStored;
+    content.innerHTML = `
+      <button id="back-to-verifications" class="back-link">← Back to verification queue</button>
+      ${individual && !storedId ? `<div class="notice warning"><strong>Readable ID number unavailable.</strong><br>This is a legacy submission made before readable ID storage was enabled. Approval is intentionally blocked; request ID resubmission.</div>` : ""}
+      ${individual && storedId ? `<div class="notice success"><strong>ID pre-check passed and readable ID stored.</strong><br>Compare the saved ID number with the number visible on the submitted National ID before approving.</div>` : ""}
+      <div class="detail-grid">
+        <div>
+          <div class="panel"><div class="panel-header"><h3 class="panel-title">Application</h3><span class="status ${statusClass(data.submission.status)}">${escapeHtml(data.submission.status)}</span></div>
+            <div class="info-grid">
+              ${info("Name", data.profile.full_name || "—")}
+              ${info("Provider type", individual ? "Individual mechanic" : "Garage / business")}
+              ${info("Phone", data.profile.phone || "—")}
+              ${info("Location", data.mechanic?.location || "—")}
+              ${info("Saved National ID", individual ? (data.identityNumber || "Not stored") : "Not required")}
+              ${info("OCR / identity claim", data.submission.identity_claimed ? "Passed" : "Not confirmed")}
+            </div>
+          </div>
+          <div class="panel"><div class="panel-header"><h3 class="panel-title">Submitted evidence</h3><span class="muted">Links expire in ${escapeHtml(data.evidence.expiresInSeconds)} seconds</span></div>
+            <div class="document-grid">
+              ${documentCard(individual ? "National ID" : "Business permit", individual ? data.evidence.nationalIdUrl : data.evidence.businessPermitUrl)}
+              ${documentCard("Profile photo", data.evidence.profilePhotoUrl)}
+              ${(data.evidence.certificateUrls ?? []).map((url, i) => documentCard(`Skill certificate ${i+1}`, url)).join("")}
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 class="panel-title">Admin review</h3>
+          <p class="muted">Approval records these checks in the protected review workflow.</p>
+          <label class="check-row"><input id="check-document" type="checkbox" /> <span>I inspected the submitted ${individual ? "National ID" : "business permit"} and it appears clear and valid.</span></label>
+          <label class="check-row"><input id="check-match" type="checkbox" /> <span>${individual ? "The saved ID number matches the number visible on the National ID image." : "The business permit details match this garage/business application."}</span></label>
+          <label>Review note<textarea id="review-note" placeholder="Required for rejection or resubmission"></textarea></label>
+          <div class="action-row">
+            <button id="approve-button" class="button primary" ${data.submission.status !== "pending" || (individual && !storedId) ? "disabled" : ""}>Approve mechanic</button>
+            <button id="resubmit-button" class="button warning">Request resubmission</button>
+            <button id="reject-button" class="button danger">Reject</button>
+          </div>
+          <p id="review-error" class="error-text" hidden></p>
+        </div>
+      </div>`;
+    document.querySelector("#back-to-verifications").addEventListener("click", () => void renderVerificationList());
+    const approveButton = document.querySelector("#approve-button");
+    const refreshApproval = () => {
+      const checks = document.querySelector("#check-document").checked && document.querySelector("#check-match").checked;
+      approveButton.disabled = data.submission.status !== "pending" || (individual && !storedId) || !checks;
+    };
+    document.querySelector("#check-document").addEventListener("change", refreshApproval);
+    document.querySelector("#check-match").addEventListener("change", refreshApproval);
+    refreshApproval();
+    approveButton.addEventListener("click", () => void submitReview(userId, "approve"));
+    document.querySelector("#resubmit-button").addEventListener("click", () => void submitReview(userId, "resubmit"));
+    document.querySelector("#reject-button").addEventListener("click", () => void submitReview(userId, "reject"));
+  } catch (error) { setError(error.message); }
+}
+
+function documentCard(label, url) {
+  if (!url) return `<div class="document-card"><div style="height:230px;display:grid;place-items:center;color:#667085">No document available</div><div>${escapeHtml(label)}</div></div>`;
+  return `<a class="document-card" href="${escapeHtml(url)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(url)}" alt="${escapeHtml(label)}" /><div>${escapeHtml(label)} • open full size</div></a>`;
+}
+
+async function submitReview(userId, decision) {
+  const note = document.querySelector("#review-note").value.trim();
+  const errorEl = document.querySelector("#review-error");
+  errorEl.hidden = true;
+  if ((decision === "reject" || decision === "resubmit") && !note) {
+    errorEl.textContent = "Enter a review note explaining the decision.";
+    errorEl.hidden = false;
+    return;
+  }
+  try {
+    await invoke("admin-verification", { action: "review", userId, decision, note: note || null });
+    await renderVerificationDetail(userId);
+  } catch (error) {
+    errorEl.textContent = error.message;
+    errorEl.hidden = false;
+  }
+}
+
+async function renderUsers() {
+  const data = await invoke("admin-core", { action: "users" });
+  const items = data.items ?? [];
+  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Registered users</h3><p class="muted">Live Supabase Auth + profile data. Admin authorization is separate from user roles.</p></div><input id="user-search" placeholder="Search name, email, role…" style="max-width:280px" /></div><div id="users-table"></div></div>`;
+  const render = (query = "") => {
+    const q = query.toLowerCase();
+    const filtered = items.filter((item) => [item.full_name,item.email,item.phone,item.role,item.provider_type].some((v) => String(v ?? "").toLowerCase().includes(q)));
+    document.querySelector("#users-table").innerHTML = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Phone</th><th>Provider</th><th>Mechanic status</th><th>Last sign in</th></tr></thead><tbody>${filtered.map((item) => `<tr><td><strong>${escapeHtml(item.full_name || "Unnamed")}</strong><br><span class="muted">${escapeHtml(item.email || "No email")}</span></td><td>${escapeHtml(item.role)}</td><td>${escapeHtml(item.phone || "—")}</td><td>${escapeHtml(item.provider_type || "—")}</td><td>${item.mechanic ? `<span class="status ${item.mechanic.verified?"approved":"pending"}">${item.mechanic.verified?"verified":"unverified"}</span>` : "—"}</td><td>${escapeHtml(formatDate(item.last_sign_in_at))}</td></tr>`).join("")}</tbody></table></div>`;
+  };
+  render();
+  document.querySelector("#user-search").addEventListener("input", (e) => render(e.target.value));
+}
+
+async function renderJobs() {
+  const data = await invoke("admin-core", { action: "jobs" });
+  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Repair requests</h3><p class="muted">Live persisted repair/dispatch records.</p></div></div>${renderRequestTable(data.items ?? [])}</div>`;
+}
+function renderRequestCards(items) {
+  if (!items.length) return `<div class="empty">No repair requests yet.</div>`;
+  return `<div class="list">${items.map((item) => `<div class="list-card"><div><div class="list-title">${escapeHtml(item.symptom || item.id)}</div><div class="list-subtitle">${escapeHtml(item.location_text || "Location unavailable")} • ${escapeHtml(formatDate(item.created_at))}</div></div><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div>`).join("")}</div>`;
+}
+function renderRequestTable(items) {
+  if (!items.length) return `<div class="empty">No repair requests yet.</div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Motorist</th><th>Mechanic</th><th>Problem</th><th>Location</th><th>Status</th><th>Created</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(String(item.id).slice(0,8))}</td><td>${escapeHtml(item.motorist?.full_name || item.motorist_id)}</td><td>${escapeHtml(item.mechanic?.full_name || "Unassigned")}</td><td>${escapeHtml(item.symptom || item.description)}</td><td>${escapeHtml(item.location_text || "—")}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(formatDate(item.created_at))}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+async function renderPayments() {
+  const data = await invoke("admin-core", { action: "payments" });
+  const items = data.items ?? [];
+  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Connection payments</h3><p class="muted">Live connection-fee records. Provider secrets remain server-side.</p></div></div>${items.length ? `<div class="table-wrap"><table><thead><tr><th>Payment</th><th>Request</th><th>Amount</th><th>Provider</th><th>Status</th><th>Receipt</th><th>Created</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(String(item.id).slice(0,8))}</td><td>${escapeHtml(String(item.request_id).slice(0,8))}</td><td>${escapeHtml(formatKES(item.amount))}</td><td>${escapeHtml(item.provider)}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(item.mpesa_receipt_number || "—")}</td><td>${escapeHtml(formatDate(item.created_at))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No connection payment records yet.</div>`}</div>`;
+}
+
+async function renderAnalytics() {
+  const data = await invoke("admin-core", { action: "analytics" });
+  const m = data.metrics;
+  content.innerHTML = `<div class="metric-grid">${metric("Users",m.totalUsers)}${metric("Verified mechanics",m.verifiedMechanics)}${metric("Repair requests",m.repairRequests)}${metric("Average rating",m.averageRating || "—")}</div><div class="panel"><h3 class="panel-title">Operational analytics</h3><div class="info-grid" style="margin-top:14px">${info("Paid connection fees",formatKES(m.paidConnectionFees))}${info("Payment records",m.connectionPayments)}${info("Ratings submitted",m.ratings)}${info("Mechanics available",m.availableMechanics)}</div></div>`;
+}
+
+function renderSettings() {
+  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Admin identity</h3><p class="muted">Authorization is stored server-side and is independent of motorist/mechanic roles.</p></div><span class="status approved">${escapeHtml(state.role)}</span></div><div class="notice info"><strong>Separate application boundary</strong><br>This admin console is outside Expo Router and is not included in the Android/iOS AutoAssist user bundle. The browser only receives the public Supabase publishable key; privileged reads and writes are performed by JWT-protected Edge Functions after server-side admin authorization.</div><div class="info-grid">${info("Current role",String(state.role).replaceAll("_"," "))}${info("Verification access",["super_admin","verification_admin"].includes(state.role)?"Enabled":"No")}${info("Full operations access",state.role==="super_admin"?"Enabled":"Restricted")}${info("Service role in browser","Never")}</div></div>`;
+}
+
+function renderNotConnected(section, message) {
+  content.innerHTML = `<div class="panel"><h3 class="panel-title">${escapeHtml(section)}</h3><div class="notice info" style="margin-top:14px">${escapeHtml(message)}</div></div>`;
+}
+
+void restore();

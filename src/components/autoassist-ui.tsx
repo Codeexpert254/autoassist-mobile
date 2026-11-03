@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  AdminScreen as BaseAdminScreen,
   BottomNav as BaseBottomNav,
   ScreenHeader,
   StaticScreen as BaseStaticScreen,
@@ -156,45 +155,6 @@ export function StaticScreen(props: StaticScreenProps) {
   );
 }
 
-type AdminProps = {
-  title: string;
-  subtitle: string;
-  metrics?: Array<{ title: string; value: string; meta?: string }>;
-  items?: Array<{ title: string; subtitle: string }>;
-  active?: string;
-};
-
-const adminNav = [
-  ["Overview", "/admin/overview"],
-  ["Verification", "/admin/verification-queue"],
-  ["Live jobs", "/admin/live-dispatch"],
-  ["Orders", "/admin/orders-deliveries"],
-  ["Payments", "/admin/payments-payouts"],
-  ["Support", "/admin/support-disputes"],
-  ["Users", "/admin/user-management"],
-  ["Analytics", "/admin/analytics"],
-] as const;
-
-export function AdminScreen(props: AdminProps) {
-  const router = useRouter();
-
-  return (
-    <View style={styles.adminWrap}>
-      <BaseAdminScreen {...props} />
-      <View pointerEvents="box-none" style={styles.adminHotspots}>
-        {adminNav.map(([label, route]) => (
-          <Pressable
-            accessibilityLabel={`Open ${label}`}
-            key={label}
-            style={styles.adminHotspot}
-            onPress={() => router.replace(route as never)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -270,19 +230,5 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: "#1857A6",
     fontFamily: "Inter_600SemiBold",
-  },
-  adminWrap: {
-    flex: 1,
-  },
-  adminHotspots: {
-    position: "absolute",
-    left: 16,
-    top: 76,
-    width: 158,
-    gap: 12,
-  },
-  adminHotspot: {
-    height: 36,
-    borderRadius: 8,
   },
 });
