@@ -60,27 +60,26 @@ Deno.serve(async (req) => {
   }
 
   const fingerprint = await hmacHex(serviceKey, normalized);
-  const { data: existing, error: existingError } = await service
-    .schema("private")
-    .from("mechanic_identity_fingerprints")
-    .select("user_id")
-    .eq("identity_hmac", fingerprint)
-    .maybeSingle();
-  if (existingError) return json({ error: "Unable to check identity uniqueness." }, 500);
+  const { data: registered, error: identityError } = await service.rpc(
+    "register_mechanic_identity_fingerprint",
+    {
+      p_user_id: authData.user.id,
+      p_identity_hmac: fingerprint,
+    },
+  );
 
-  if (existing && existing.user_id !== authData.user.id) {
-    return json({ error: "This identity is already linked to another AutoAssist mechanic account." }, 409);
+  if (identityError) {
+    console.error("Identity fingerprint RPC failed", {
+      code: identityError.code,
+      message: identityError.message,
+      hint: identityError.hint,
+    });
+    return json({ error: "Unable to securely register this ID number. Please try again." }, 500);
   }
 
-  const { error: upsertError } = await service
-    .schema("private")
-    .from("mechanic_identity_fingerprints")
-    .upsert({
-      user_id: authData.user.id,
-      identity_hmac: fingerprint,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
-  if (upsertError) return json({ error: "Unable to register identity claim." }, 500);
+  if (registered !== true) {
+    return json({ error: "This identity is already linked to another AutoAssist mechanic account." }, 409);
+  }
 
   const { error: verificationError } = await service
     .from("mechanic_verification_submissions")
@@ -90,7 +89,15 @@ Deno.serve(async (req) => {
       status: "draft",
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
-  if (verificationError) return json({ error: "Unable to update verification draft." }, 500);
+
+  if (verificationError) {
+    console.error("Verification draft update failed", {
+      code: verificationError.code,
+      message: verificationError.message,
+      hint: verificationError.hint,
+    });
+    return json({ error: "Unable to update the verification draft. Please try again." }, 500);
+  }
 
   return json({ registered: true });
 });
