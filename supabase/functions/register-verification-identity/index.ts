@@ -61,15 +61,16 @@ Deno.serve(async (req) => {
 
   const fingerprint = await hmacHex(serviceKey, normalized);
   const { data: registered, error: identityError } = await service.rpc(
-    "register_mechanic_identity_fingerprint",
+    "register_mechanic_identity_private",
     {
       p_user_id: authData.user.id,
       p_identity_hmac: fingerprint,
+      p_identity_number: normalized,
     },
   );
 
   if (identityError) {
-    console.error("Identity fingerprint RPC failed", {
+    console.error("Identity registration RPC failed", {
       code: identityError.code,
       message: identityError.message,
       hint: identityError.hint,
@@ -99,5 +100,5 @@ Deno.serve(async (req) => {
     return json({ error: "Unable to update the verification draft. Please try again." }, 500);
   }
 
-  return json({ registered: true });
+  return json({ registered: true, readableIdentityStored: true });
 });
