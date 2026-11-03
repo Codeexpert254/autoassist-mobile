@@ -35,6 +35,7 @@
       ],
       "expo-font",
       "expo-image",
+      "expo-notifications",
       [
         "expo-image-picker",
         {
@@ -45,7 +46,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow AutoAssist to use your location to find nearby mechanics and create service requests."
+          "locationWhenInUsePermission": "Allow AutoAssist to use your location to match nearby service requests and mechanics."
         }
       ]
     ],
