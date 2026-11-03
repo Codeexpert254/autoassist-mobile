@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useRepairFlow } from "@/context/repair-flow-context";
+import { verifyNationalIdImageMatchesNumber } from "@/services/id-ocr";
 import {
   getMechanicVerification,
   registerMechanicIdentityNumber,
@@ -134,9 +135,21 @@ export default function MechanicVerificationFunctional() {
     }
     if (key === "nationalId" || key === "businessPermit") {
       if ((asset.width ?? 0) < 500 || (asset.height ?? 0) < 300) {
-        throw new Error("The document image is too small to review clearly. Move closer and retake it in good light.");
+        throw new Error("The document image is too small to read clearly. Move closer and retake it in good light.");
       }
     }
+  };
+
+  const requireIdNumberBeforeIdImage = () => {
+    if (identityNumber.trim().length < 6) {
+      setError(
+        checklist.identityClaimed
+          ? "Enter the National ID number again before replacing the saved ID image. AutoAssist must match the new image to the number."
+          : "Enter your National ID number first, then take or upload the ID photo so AutoAssist can match them.",
+      );
+      return false;
+    }
+    return true;
   };
 
   const persistImages = async (key: EvidenceKey, assets: ImagePicker.ImagePickerAsset[]) => {
@@ -156,9 +169,23 @@ export default function MechanicVerificationFunctional() {
         ...evidence,
         certificatePaths: [...evidence.certificatePaths],
       };
+      let identityClaimed = checklist.identityClaimed;
 
       for (const asset of assets) {
         validateAsset(key, asset);
+
+        if (key === "nationalId" && !isGarage) {
+          const enteredNumber = identityNumber.trim();
+          if (enteredNumber.length < 6) {
+            throw new Error("Enter your National ID number before taking or uploading the ID photo.");
+          }
+
+          setRegisteringIdentity(true);
+          await verifyNationalIdImageMatchesNumber(asset.uri, enteredNumber);
+          await registerMechanicIdentityNumber(enteredNumber);
+          identityClaimed = true;
+        }
+
         const { data, error: uploadError } = await uploadMechanicVerificationImage({
           userId: user.id,
           kind: uploadKindFor(key),
@@ -176,7 +203,7 @@ export default function MechanicVerificationFunctional() {
       }
 
       const nextChecklist: MechanicVerificationChecklist = {
-        identityClaimed: checklist.identityClaimed,
+        identityClaimed,
         nationalId: Boolean(nextEvidence.nationalIdPath),
         businessPermit: Boolean(nextEvidence.businessPermitPath),
         certificates: nextEvidence.certificatePaths.length > 0,
@@ -188,16 +215,19 @@ export default function MechanicVerificationFunctional() {
 
       setEvidence(nextEvidence);
       setChecklist(nextChecklist);
+      if (key === "nationalId" && identityClaimed) setIdentityNumber("");
       setStatus((current) => (current === "rejected" ? "rejected" : "draft"));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to save this verification image.");
     } finally {
+      setRegisteringIdentity(false);
       setUploadingKey(null);
     }
   };
 
   const chooseFromLibrary = async (key: EvidenceKey) => {
     if (uploadingKey) return;
+    if (key === "nationalId" && !isGarage && !requireIdNumberBeforeIdImage()) return;
 
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -236,6 +266,7 @@ export default function MechanicVerificationFunctional() {
 
   const captureWithCamera = async (key: EvidenceKey) => {
     if (uploadingKey || status === "pending" || status === "approved") return;
+    if (key === "nationalId" && !isGarage && !requireIdNumberBeforeIdImage()) return;
 
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -265,7 +296,7 @@ export default function MechanicVerificationFunctional() {
     }
   };
 
-  const individualIdentityReady = checklist.identityClaimed || identityNumber.trim().length >= 6;
+  const individualIdentityReady = checklist.identityClaimed && identityNumber.trim().length === 0;
   const requiredEvidenceReady = isGarage
     ? checklist.businessPermit && checklist.profilePhoto
     : individualIdentityReady && checklist.nationalId && checklist.profilePhoto;
@@ -288,21 +319,17 @@ export default function MechanicVerificationFunctional() {
     setError("");
 
     try {
-      let identityClaimed = checklist.identityClaimed;
-
       if (!isGarage && identityNumber.trim()) {
-        setRegisteringIdentity(true);
-        await registerMechanicIdentityNumber(identityNumber);
-        identityClaimed = true;
-        setChecklist((current) => ({ ...current, identityClaimed: true }));
+        throw new Error(
+          "You changed the ID number. Retake or upload the National ID so AutoAssist can match the new number before submitting.",
+        );
       }
-
-      if (!isGarage && !identityClaimed) {
-        throw new Error("Enter your National ID number before submitting verification.");
+      if (!isGarage && !checklist.identityClaimed) {
+        throw new Error("Enter your National ID number, then take or upload the ID photo so AutoAssist can match them.");
       }
 
       const providerChecklist: MechanicVerificationChecklist = {
-        identityClaimed: isGarage ? false : identityClaimed,
+        identityClaimed: isGarage ? false : checklist.identityClaimed,
         nationalId: isGarage ? false : checklist.nationalId,
         businessPermit: isGarage ? checklist.businessPermit : false,
         certificates: checklist.certificates,
@@ -325,14 +352,12 @@ export default function MechanicVerificationFunctional() {
 
       setChecklist(providerChecklist);
       setEvidence(providerEvidence);
-      setIdentityNumber("");
       setStatus((data as any).status === "rejected" ? "rejected" : "pending");
       submitVerification();
       await refreshBackend();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to submit verification.");
     } finally {
-      setRegisteringIdentity(false);
       setLoading(false);
     }
   };
@@ -373,7 +398,7 @@ export default function MechanicVerificationFunctional() {
               title="Verification under review"
               text={isGarage
                 ? "AutoAssist will review the business permit and provider profile before approval."
-                : "AutoAssist will confirm that the ID number you supplied matches the number visible on the uploaded National ID."}
+                : "AutoAssist will review the submitted National ID before final approval."}
             />
           ) : status === "rejected" ? (
             <StatusCard tone="rejected" title="Verification needs attention" text={reviewNote || "Correct the requested evidence and submit again."} />
@@ -383,7 +408,7 @@ export default function MechanicVerificationFunctional() {
               <Text style={styles.introText}>
                 {isGarage
                   ? "Provide a clear business permit and a garage/business profile photo. Skill certificates can be added later."
-                  : "Enter your ID number and provide one clear image of the side of the ID where that number is visible. Skill certificates can be added later."}
+                  : "Enter your ID number first. AutoAssist reads the ID photo on your device and will only accept it when the detected number matches. Skill certificates can be added later."}
               </Text>
             </View>
           )}
@@ -393,23 +418,23 @@ export default function MechanicVerificationFunctional() {
               <Text style={styles.identityTitle}>National ID number</Text>
               <Text style={styles.identityHelp}>
                 {checklist.identityClaimed
-                  ? "An ID number is already protected on this account. Enter a new number only if you need to correct it."
-                  : "Enter the same ID number that is visible on the ID image you will submit. The app does not store the plaintext number."}
+                  ? "The saved ID image has been matched to an ID number. To correct it, enter the new number and capture or upload the ID again."
+                  : "Enter the number exactly as printed on your National ID, then capture or upload the ID. The image is checked on-device before it is saved."}
               </Text>
               <TextInput
                 style={styles.identityInput}
                 value={identityNumber}
                 onChangeText={setIdentityNumber}
-                placeholder={checklist.identityClaimed ? "Leave blank to keep current ID number" : "Enter National ID number"}
+                placeholder={checklist.identityClaimed ? "Enter a new number only to correct it" : "Enter National ID number"}
                 placeholderTextColor="#98A2B3"
                 autoCapitalize="characters"
                 autoCorrect={false}
                 editable={!loading && !registeringIdentity}
               />
-              {checklist.identityClaimed ? (
+              {checklist.identityClaimed && !identityNumber.trim() ? (
                 <View style={styles.identityReadyRow}>
                   <SymbolView name="checkmark.shield.fill" size={18} tintColor="#1B8A5A" />
-                  <Text style={styles.identityReadyText}>Protected ID claim already on file</Text>
+                  <Text style={styles.identityReadyText}>ID number matched to the saved document</Text>
                 </View>
               ) : null}
             </View>
@@ -429,8 +454,12 @@ export default function MechanicVerificationFunctional() {
             ) : (
               <ChecklistCard
                 title="National ID"
-                subtitle={checklist.nationalId ? "National ID image saved securely" : "Capture the side of the ID where the ID number is clearly visible"}
-                checked={checklist.nationalId}
+                subtitle={
+                  checklist.nationalId && checklist.identityClaimed
+                    ? "ID number matched and image saved securely"
+                    : "Enter the ID number above, then capture the side where that number is clearly visible"
+                }
+                checked={checklist.nationalId && checklist.identityClaimed}
                 uploading={uploadingKey === "nationalId"}
                 onPress={() => void captureWithCamera("nationalId")}
                 onUpload={() => void chooseFromLibrary("nationalId")}
@@ -473,16 +502,16 @@ export default function MechanicVerificationFunctional() {
 
           {!locked ? (
             <View style={styles.reviewInfoCard}>
-              <Text style={styles.reviewInfoTitle}>What AutoAssist will check</Text>
+              <Text style={styles.reviewInfoTitle}>What AutoAssist checks</Text>
               {isGarage ? (
                 <>
-                  <Text style={styles.reviewInfoText}>• The uploaded document is a valid-looking business permit.</Text>
+                  <Text style={styles.reviewInfoText}>• The uploaded document appears to be a valid business permit.</Text>
                   <Text style={styles.reviewInfoText}>• The permit details correspond to the garage/business being registered.</Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.reviewInfoText}>• The uploaded image is a valid-looking National ID.</Text>
-                  <Text style={styles.reviewInfoText}>• The ID number visible on the document matches the number you entered.</Text>
+                  <Text style={styles.reviewInfoText}>• On-device OCR must detect the same ID number you entered before the image is accepted.</Text>
+                  <Text style={styles.reviewInfoText}>• A reviewer still checks that the document appears genuine before final approval.</Text>
                 </>
               )}
               <Text style={styles.reviewInfoText}>• Skill certificates do not block initial verification and can be added later.</Text>
@@ -569,9 +598,9 @@ function ChecklistCard({
         </View>
         <View style={styles.checkCopy}>
           <Text style={styles.checkTitle}>{title}</Text>
-          <Text style={styles.checkSubtitle}>{uploading ? "Saving securely…" : subtitle}</Text>
+          <Text style={styles.checkSubtitle}>{uploading ? "Checking and saving securely…" : subtitle}</Text>
         </View>
-        <Text style={[styles.checkStatus, checked && styles.checkStatusReady]}>{uploading ? "SAVING" : checked ? "READY" : "CAMERA"}</Text>
+        <Text style={[styles.checkStatus, checked && styles.checkStatusReady]}>{uploading ? "CHECKING" : checked ? "READY" : "CAMERA"}</Text>
       </Pressable>
       {!disabled && !uploading ? (
         <Pressable onPress={onUpload} style={styles.uploadFallbackButton}>
