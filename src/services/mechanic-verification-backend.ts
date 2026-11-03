@@ -2,27 +2,21 @@ import { requireSupabase } from "@/lib/supabase";
 
 export type MechanicVerificationChecklist = {
   identityClaimed: boolean;
-  nationalIdFront: boolean;
-  nationalIdBack: boolean;
-  identitySelfie: boolean;
+  nationalId: boolean;
   businessPermit: boolean;
   certificates: boolean;
   profilePhoto: boolean;
 };
 
 export type MechanicVerificationEvidence = {
-  nationalIdFrontPath: string | null;
-  nationalIdBackPath: string | null;
-  selfiePath: string | null;
+  nationalIdPath: string | null;
   businessPermitPath: string | null;
   certificatePaths: string[];
   profilePhotoPath: string | null;
 };
 
 export type VerificationImageKind =
-  | "national-id-front"
-  | "national-id-back"
-  | "identity-selfie"
+  | "national-id"
   | "business-permit"
   | "certificate"
   | "profile-photo";
@@ -46,18 +40,16 @@ function verificationPayload(
   checklist: MechanicVerificationChecklist,
   evidence: MechanicVerificationEvidence,
 ) {
-  const nationalIdComplete = checklist.nationalIdFront && checklist.nationalIdBack;
   return {
     user_id: userId,
-    identity_claimed: checklist.identityClaimed,
-    national_id_confirmed: nationalIdComplete,
+    national_id_confirmed: checklist.nationalId,
     business_permit_confirmed: checklist.businessPermit,
     certificates_confirmed: checklist.certificates,
     profile_photo_confirmed: checklist.profilePhoto,
-    national_id_path: evidence.nationalIdFrontPath,
-    national_id_front_path: evidence.nationalIdFrontPath,
-    national_id_back_path: evidence.nationalIdBackPath,
-    selfie_path: evidence.selfiePath,
+    national_id_path: evidence.nationalIdPath,
+    national_id_front_path: evidence.nationalIdPath,
+    national_id_back_path: null,
+    selfie_path: null,
     business_permit_path: evidence.businessPermitPath,
     certificate_paths: evidence.certificatePaths,
     profile_photo_path: evidence.profilePhotoPath,
@@ -72,6 +64,11 @@ export async function getMechanicVerification(userId: string) {
     .maybeSingle();
 }
 
+/**
+ * Registers an Individual Mechanic's claimed National ID number privately.
+ * The Edge Function normalizes the number and stores only a one-way HMAC
+ * fingerprint so the plaintext ID number is never persisted by the app.
+ */
 export async function registerMechanicIdentityNumber(identityNumber: string) {
   const client = requireSupabase();
   const { data, error } = await client.functions.invoke("register-verification-identity", {
@@ -125,7 +122,7 @@ export async function saveMechanicVerificationDraft(
   const { data: existing, error: lookupError } = await getMechanicVerification(userId);
   if (lookupError) throw lookupError;
 
-  const payload = verificationPayload(userId, checklist, evidence) as any;
+  const payload = verificationPayload(userId, checklist, evidence);
 
   if (existing) {
     return client
@@ -138,7 +135,7 @@ export async function saveMechanicVerificationDraft(
 
   return client
     .from("mechanic_verification_submissions")
-    .insert({ ...payload, status: "draft" } as any)
+    .insert({ ...payload, status: "draft" })
     .select()
     .single();
 }
@@ -155,7 +152,7 @@ export async function submitMechanicVerification(
   const payload = {
     ...verificationPayload(userId, checklist, evidence),
     status: "pending",
-  } as any;
+  };
 
   if (existing) {
     return client
