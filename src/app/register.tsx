@@ -67,9 +67,6 @@ export default function Register() {
     passwordsMatch &&
     mechanicTypeIsValid;
 
-  const mechanicLabel = providerType === "garage" ? "Garage / business" : "Individual mechanic";
-  const accountTitle = role === "mechanic" ? mechanicLabel : roleLabels[role];
-
   const goToLogin = (requiresEmailConfirmation: boolean) => {
     router.replace({
       pathname: "/login",
@@ -127,11 +124,11 @@ export default function Register() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.headingRow}>
             <View style={styles.headingCopy}>
-              <Text style={styles.title}>Create your {accountTitle} account</Text>
-              <Text style={styles.subTitle}>A few details and your account is ready.</Text>
+              <Text style={styles.title}>Create account</Text>
+              <Text style={styles.subTitle}>Enter your details to create your AutoAssist account.</Text>
             </View>
             <Pressable onPress={() => router.replace(role === "mechanic" ? "/mechanic/account-type" : "/roleselection")}>
-              <Text style={styles.changeRole}>{role === "mechanic" ? "Change type" : "Change role"}</Text>
+              <Text style={styles.changeRole}>{role === "mechanic" ? "Change mechanic type" : "Change account type"}</Text>
             </Pressable>
           </View>
 
