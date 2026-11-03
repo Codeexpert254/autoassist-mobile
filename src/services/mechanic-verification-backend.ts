@@ -1,4 +1,5 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import { Alert } from "react-native";
 
 import { requireSupabase } from "@/lib/supabase";
 
@@ -84,8 +85,9 @@ async function functionErrorMessage(error: unknown) {
 
 /**
  * Registers an Individual Mechanic's claimed National ID number privately.
- * The Edge Function normalizes the number and stores only a one-way HMAC
- * fingerprint so the plaintext ID number is never persisted by the app.
+ * The Edge Function stores the normalized readable ID only in a private,
+ * server-managed table and also keeps a one-way HMAC fingerprint for
+ * duplicate-account detection. The public verification row never contains it.
  */
 export async function registerMechanicIdentityNumber(identityNumber: string) {
   const client = requireSupabase();
@@ -94,7 +96,7 @@ export async function registerMechanicIdentityNumber(identityNumber: string) {
   });
   if (error) throw new Error(await functionErrorMessage(error));
   if (data?.error) throw new Error(String(data.error));
-  return data as { registered: boolean };
+  return data as { registered: boolean; readableIdentityStored?: boolean };
 }
 
 export async function uploadMechanicVerificationImage(input: {
@@ -125,10 +127,19 @@ export async function uploadMechanicVerificationImage(input: {
   const suffix = Math.random().toString(36).slice(2, 10);
   const path = `${input.userId}/${input.kind}/${Date.now()}-${suffix}.${extension}`;
 
-  return client.storage.from(VERIFICATION_BUCKET).upload(path, arrayBuffer, {
+  const result = await client.storage.from(VERIFICATION_BUCKET).upload(path, arrayBuffer, {
     contentType: input.mimeType ?? "image/jpeg",
     upsert: false,
   });
+
+  if (!result.error && input.kind === "national-id") {
+    Alert.alert(
+      "ID number matched",
+      "The ID number matches the National ID image you provided, and the image was uploaded securely. Complete the remaining required documents, then submit your application for verification.",
+    );
+  }
+
+  return result;
 }
 
 export async function saveMechanicVerificationDraft(
