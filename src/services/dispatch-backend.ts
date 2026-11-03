@@ -182,8 +182,13 @@ export async function getMechanicActiveRepairs(mechanicId: string) {
 
 export function subscribeToMechanicOffers(mechanicId: string, onChange: () => void) {
   const client = requireSupabase();
+
+  // A React remount can subscribe again before removeChannel() finishes.
+  // Give each subscription a unique topic so Supabase never reuses an
+  // already-subscribed channel when registering postgres_changes callbacks.
+  const subscriptionId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const channel = client
-    .channel(`mechanic-offers:${mechanicId}`)
+    .channel(`mechanic-offers:${mechanicId}:${subscriptionId}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "mechanic_offers", filter: `mechanic_id=eq.${mechanicId}` },
@@ -191,7 +196,10 @@ export function subscribeToMechanicOffers(mechanicId: string, onChange: () => vo
     )
     .subscribe();
 
+  let removed = false;
   return () => {
+    if (removed) return;
+    removed = true;
     void client.removeChannel(channel);
   };
 }
