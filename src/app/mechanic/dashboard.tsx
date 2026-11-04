@@ -23,6 +23,7 @@ import {
   getFloatingOfferStatus,
   getFloatingOfferDiagnostics,
   openFloatingOfferPermissionSettings,
+  setFloatingOffersOnline,
 } from "@/services/floating-offers";
 
 export default function Dashboard() {
@@ -66,6 +67,7 @@ export default function Dashboard() {
         openFloatingOfferPermissionSettings();
       } else {
         enableFloatingOffersForMechanic(user.id);
+        setFloatingOffersOnline(user.id, Boolean(mechanicProfile?.verified && mechanicProfile?.is_available));
         setFloatingNotice("Floating popups enabled for your mechanic account. Standard notifications stay on as a fallback.");
       }
       refreshFloatingStatus();
@@ -94,6 +96,7 @@ export default function Dashboard() {
       if (mechanicResult.error) throw mechanicResult.error;
       const mechanic = mechanicResult.data as any;
       setMechanicProfile(mechanic);
+      setFloatingOffersOnline(user.id, Boolean(mechanic?.verified && mechanic?.is_available));
 
       if (!mechanic) {
         setVerificationStatus("not-submitted");
@@ -176,8 +179,9 @@ export default function Dashboard() {
     try {
       if (!available) {
         const result = await updateMechanicAvailability(user.id, false);
-        dismissFloatingOffer();
         if (result.error) throw result.error;
+        setFloatingOffersOnline(user.id, false);
+        dismissFloatingOffer();
         setMechanicProfile(result.data);
         setNotificationMessage("You are offline. AutoAssist will not offer new requests until you go online again.");
         return;
@@ -195,6 +199,7 @@ export default function Dashboard() {
       });
       if (result.error) throw result.error;
       setMechanicProfile(result.data);
+      setFloatingOffersOnline(user.id, true);
 
       const push = await ensureJobNotifications(user.id);
       setNotificationMessage(
@@ -437,7 +442,7 @@ export default function Dashboard() {
                 const d = getFloatingOfferDiagnostics();
                 const time = Number(d.lastFcmAt);
                 setFloatingDebug(
-                  `Permission: ${d.permission} • Enabled: ${d.enabled}\n` +
+                  `Permission: ${d.permission} • Enabled: ${d.enabled} • Online: ${d.online}\n` +
                   `Last native data alert: ${time > 0 ? new Date(time).toLocaleString() : "none received"}\n` +
                   `Last result: ${d.lastDecision}`
                 );

@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(nextSession);
 
     if (!nextSession?.user) {
+      disableFloatingOffers();
       setProfile(null);
       return null;
     }

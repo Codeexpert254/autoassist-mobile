@@ -55,6 +55,7 @@ internal object OverlayController {
       "lastFcmAt" to p.getLong("lastFcmAt", 0L).toString(),
       "lastDecision" to (p.getString("lastDecision", "no background data received") ?: "unknown"),
       "enabled" to isEnabled(context).toString(),
+      "online" to p.getBoolean("online", false).toString(),
       "permission" to Settings.canDrawOverlays(context).toString()
     )
   }
@@ -69,8 +70,15 @@ internal object OverlayController {
   fun enable(context: Context, mechanicId: String) {
     prefs(context).edit()
       .putBoolean("enabled", true)
+      .putBoolean("online", false) // Reconfirmed from the live mechanic profile.
       .putString("mechanicId", mechanicId)
       .apply()
+  }
+
+  fun setOnline(context: Context, mechanicId: String, online: Boolean) {
+    if (prefs(context).getString("mechanicId", null) != mechanicId) return
+    prefs(context).edit().putBoolean("online", online).apply()
+    if (!online) dismiss()
   }
 
   fun disable(context: Context) {
@@ -134,6 +142,10 @@ internal object OverlayController {
       noteDecision(context, "overlay_permission_missing")
       return
     }
+    if (!prefs(context).getBoolean("online", false)) {
+      noteDecision(context, "mechanic_offline")
+      return
+    }
     if (data["recipientId"] != prefs(context).getString("mechanicId", null)) {
       noteDecision(context, "account_mismatch")
       return
@@ -164,7 +176,7 @@ internal object OverlayController {
     }
 
     main.post {
-      if (!isEnabled(context) || !Settings.canDrawOverlays(context)) return@post
+      if (!isEnabled(context) || !Settings.canDrawOverlays(context) || !prefs(context).getBoolean("online", false)) return@post
       if (expires <= System.currentTimeMillis()) return@post
       if (visibleOfferId == id) return@post
       try {
@@ -274,7 +286,7 @@ internal object OverlayController {
       override fun run() {
         if (overlay !== card) return
         val seconds = ceil((expires - System.currentTimeMillis()).toDouble() / 1000).toInt()
-        if (seconds <= 0 || !isEnabled(context) || !Settings.canDrawOverlays(context)) {
+        if (seconds <= 0 || !isEnabled(context) || !Settings.canDrawOverlays(context) || !prefs(context).getBoolean("online", false)) {
           removeOnMainThread()
           return
         }

@@ -30,6 +30,9 @@ class AutoAssistOverlayModule : Module() {
       require(Settings.canDrawOverlays(context())) { "Enable Appear on top in Android Settings first" }
       OverlayController.enable(context(), userId)
     }
+    Function("setOnline") { userId: String, online: Boolean ->
+      OverlayController.setOnline(context(), userId, online)
+    }
     Function("disable") {
       OverlayController.disable(context())
     }

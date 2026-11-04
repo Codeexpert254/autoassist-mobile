@@ -6,6 +6,7 @@ type OverlayNative = {
   hasPermission(): boolean;
   isEnabled(): boolean;
   enableForUser(userId: string): void;
+  setOnline(userId: string, online: boolean): void;
   disable(): void;
   dismiss(): void;
   openPermissionSettings(): void;
@@ -55,4 +56,9 @@ export function getFloatingOfferDiagnostics(): Record<string, string> {
     enabled: "false",
     permission: "false",
   };
+}
+
+/** Keeps background overlays tied to the mechanic's saved availability. */
+export function setFloatingOffersOnline(userId: string, online: boolean): void {
+  native?.setOnline(userId, online);
 }
