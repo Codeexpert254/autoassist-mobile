@@ -73,9 +73,9 @@ export async function getDispatchRequest(requestId: string) {
   return table.select("*").eq("id", requestId).single();
 }
 
-export async function dispatchRepairRequest(requestId: string) {
+export async function dispatchRepairRequest(requestId: string, retry = false) {
   const { data, error } = await requireSupabase().functions.invoke("dispatch-repair-request", {
-    body: { requestId },
+    body: { requestId, retry },
   });
   if (error) return throwFunctionError(error, "Unable to dispatch this repair request.");
   if (data?.error) throw new Error(String(data.error));
