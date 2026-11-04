@@ -16,7 +16,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
+import android.text.TextUtils
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
@@ -105,11 +105,11 @@ internal object OverlayController {
   private fun dp(context: Context, value: Int): Int =
     (value * context.resources.displayMetrics.density).toInt()
 
-  private fun roundedBackground(color: Int, border: Int, radius: Int = 16): GradientDrawable =
+  private fun roundedBackground(context: Context, color: Int, border: Int, radiusDp: Int): GradientDrawable =
     GradientDrawable().apply {
       setColor(color)
-      cornerRadius = radius.toFloat()
-      setStroke(2, border)
+      cornerRadius = dp(context, radiusDp).toFloat()
+      setStroke(dp(context, 1), border)
     }
 
   private fun label(context: Context, text: String, size: Float, color: Int, bold: Boolean = false): TextView =
@@ -117,8 +117,18 @@ internal object OverlayController {
       this.text = text
       textSize = size
       setTextColor(color)
-      if (bold) setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+      // Use sans serif even when Samsung has a handwritten system font enabled.
+      typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+      includeFontPadding = false
     }
+
+  private fun limitedLabel(context: Context, value: String, size: Float, color: Int,
+    lines: Int, bold: Boolean = false
+  ): TextView = label(context, value, size, color, bold).apply {
+    maxLines = lines
+    ellipsize = TextUtils.TruncateAt.END
+    setLineSpacing(dp(context, 2).toFloat(), 1f)
+  }
 
   private fun activeInForeground(): Boolean =
     try {
@@ -198,74 +208,107 @@ internal object OverlayController {
     val gray = Color.rgb(71, 84, 103)
     val white = Color.WHITE
 
+    // Match the AutoAssist in-app card, not the handset's themed Android buttons.
     val card = LinearLayout(context).apply {
-      orientation = LinearLayout.VERTICAL
-      setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
-      background = roundedBackground(white, Color.rgb(174, 205, 246))
+      orientation = LinearLayout.HORIZONTAL
+      background = roundedBackground(context, white, Color.rgb(174, 205, 246), 16)
       elevation = dp(context, 12).toFloat()
+      clipToOutline = true
     }
+    card.addView(View(context).apply { setBackgroundColor(blue) },
+      LinearLayout.LayoutParams(dp(context, 5), -1))
 
-    val headline = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-    headline.addView(label(context, "AutoAssist • New service request", 14f, blue, true),
-      LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-    val timer = label(context, "", 12f, Color.rgb(138, 82, 0), true)
-    headline.addView(timer)
-    card.addView(headline)
+    val content = LinearLayout(context).apply {
+      orientation = LinearLayout.VERTICAL
+      setPadding(dp(context, 14), dp(context, 14), dp(context, 14), dp(context, 14))
+    }
+    card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
 
-    fun addLine(value: String, size: Float, color: Int, bold: Boolean = false) {
+    val header = LinearLayout(context).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+    }
+    header.addView(View(context).apply {
+      background = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(Color.rgb(27, 138, 90))
+      }
+    }, LinearLayout.LayoutParams(dp(context, 9), dp(context, 9)).apply {
+      marginEnd = dp(context, 7)
+    })
+    header.addView(limitedLabel(context, "New service request for you",
+      12f, Color.rgb(18, 61, 118), 1, true),
+      LinearLayout.LayoutParams(0, -2, 1f))
+    val timer = label(context, "", 10f, Color.rgb(138, 82, 0), true).apply {
+      gravity = Gravity.END or Gravity.CENTER_VERTICAL
+    }
+    header.addView(timer, LinearLayout.LayoutParams(-2, -2).apply {
+      marginStart = dp(context, 7)
+    })
+    content.addView(header)
+
+    fun addLine(value: String, size: Float, color: Int, maxLines: Int,
+      marginDp: Int, bold: Boolean = false
+    ) {
       if (value.isBlank()) return
-      val text = label(context, value, size, color, bold)
-      val params = LinearLayout.LayoutParams(-1, -2)
-      params.topMargin = dp(context, 6)
-      card.addView(text, params)
+      content.addView(limitedLabel(context, value, size, color, maxLines, bold),
+        LinearLayout.LayoutParams(-1, -2).apply {
+          topMargin = dp(context, marginDp)
+        })
     }
-    addLine((data["symptom"] ?: "Service request").take(60), 17f, navy, true)
-    addLine((data["description"] ?: "A motorist needs assistance.").take(150), 13f, gray)
-    addLine("📍 " + (data["locationText"] ?: "Location unavailable").take(90), 12f, gray)
-    addLine("🕒 " + (data["preferredTime"] ?: "As soon as possible").take(60), 12f, gray)
+    addLine((data["symptom"] ?: "Service request").take(60),
+      15f, navy, 1, 8, true)
+    addLine((data["description"] ?: "A motorist needs assistance.").take(250),
+      11f, Color.rgb(52, 64, 84), 3, 4)
+    addLine("📍 " + (data["locationText"] ?: "Location unavailable").take(120),
+      10f, gray, 2, 5)
+    addLine("🕒 " + (data["preferredTime"] ?: "As soon as possible").take(90),
+      10f, gray, 1, 5)
 
     val actions = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
     }
-    val actionParams = LinearLayout.LayoutParams(0, dp(context, 43), 1f)
-    actionParams.topMargin = dp(context, 12)
-    val dismissButton = Button(context).apply {
-      text = "Dismiss"
-      isAllCaps = false
-      textSize = 12f
-      setTextColor(gray)
-      background = roundedBackground(Color.rgb(242, 244, 247), Color.rgb(208, 213, 221), 12)
-      setOnClickListener { dismiss() }
+    // Samsung's native Button applies minimum heights and background insets
+    // that get cropped inside a 43dp row. Explicit TextView tap targets
+    // have no theme-dependent inset and retain their rounded bottom corners.
+    fun actionButton(text: String, foreground: Int, fill: Int, stroke: Int,
+      onTap: () -> Unit
+    ): TextView = label(context, text, 11f, foreground, true).apply {
+      gravity = Gravity.CENTER
+      setPadding(dp(context, 4), 0, dp(context, 4), 0)
+      background = roundedBackground(context, fill, stroke, 9)
+      isClickable = true
+      isFocusable = true
+      contentDescription = text
+      setOnClickListener { onTap() }
     }
-    actions.addView(dismissButton, actionParams)
+    val dismiss = actionButton("Dismiss", gray, white, Color.rgb(208, 213, 221)) {
+      dismiss()
+    }
+    actions.addView(dismiss, LinearLayout.LayoutParams(0, dp(context, 42), 1f).apply {
+      topMargin = dp(context, 12)
+    })
 
-    val openParams = LinearLayout.LayoutParams(0, dp(context, 43), 1.6f)
-    openParams.topMargin = dp(context, 12)
-    openParams.marginStart = dp(context, 8)
-    val openButton = Button(context).apply {
-      text = "View & respond"
-      isAllCaps = false
-      textSize = 12f
-      setTextColor(white)
-      background = roundedBackground(blue, blue, 12)
-      setOnClickListener {
-        dismiss()
-        val url = Uri.parse("autoassist:///mechanic/job-offer?offerId=${Uri.encode(id)}")
-        val intent = Intent(Intent.ACTION_VIEW, url).apply {
-          setClassName(context.packageName, "${context.packageName}.MainActivity")
-          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
-        try {
-          context.startActivity(intent)
-        } catch (error: Exception) {
-          Log.w("AutoAssistOverlay", "Could not open offer, use the notification", error)
-          context.packageManager.getLaunchIntentForPackage(context.packageName)?.let(context::startActivity)
-        }
+    val respond = actionButton("View & respond", white, blue, blue) {
+      dismiss()
+      val url = Uri.parse("autoassist:///mechanic/job-offer?offerId=${Uri.encode(id)}")
+      val intent = Intent(Intent.ACTION_VIEW, url).apply {
+        setClassName(context.packageName, "${context.packageName}.MainActivity")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      }
+      try {
+        context.startActivity(intent)
+      } catch (error: Exception) {
+        Log.w("AutoAssistOverlay", "Could not open offer, use the notification", error)
+        context.packageManager.getLaunchIntentForPackage(context.packageName)?.let(context::startActivity)
       }
     }
-    actions.addView(openButton, openParams)
-    card.addView(actions)
+    actions.addView(respond, LinearLayout.LayoutParams(0, dp(context, 42), 2f).apply {
+      topMargin = dp(context, 12)
+      marginStart = dp(context, 9)
+    })
+    content.addView(actions)
 
     val params = WindowManager.LayoutParams(
       context.resources.displayMetrics.widthPixels - dp(context, 24),
