@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const requestId = String(body.requestId ?? "");
+  const retry = body.retry === true;
   if (!requestId) return json({ error: "requestId is required" }, 400);
 
   const { data: request, error: requestError } = await service.from("repair_requests").select("*").eq("id", requestId).single();
@@ -96,6 +97,9 @@ Deno.serve(async (req) => {
   if (request.motorist_id !== authData.user.id) return json({ error: "Forbidden" }, 403);
   if (["cancelled", "completed"].includes(request.status)) return json({ state: request.status, requestId });
   if (request.mechanic_id) return json({ state: request.status, requestId, mechanicId: request.mechanic_id });
+  if (!["matching", "offered"].includes(request.status)) {
+    return json({ error: "This request is not eligible for matching." }, 409);
+  }
 
   const now = new Date();
   const { data: offers } = await service.from("mechanic_offers").select("*").eq("request_id", requestId).order("created_at", { ascending: true });
@@ -136,10 +140,62 @@ Deno.serve(async (req) => {
   if (serviceMatches.length > 0) scored = serviceMatches;
   scored.sort((a: any, b: any) => b.matchScore - a.matchScore);
 
-  const winner = scored[0];
+  let winner = scored[0];
+
+  // A declined mechanic should not be spammed automatically. However,
+  // a motorist explicitly pressing Retry may try that same eligible
+  // mechanic again if there are no previously untried providers.
+  // Maximum three offers per mechanic per request, at least 10 seconds apart.
+  // All offers are separate rows; the existing request/description is reused.
+  let retryAfterSeconds = 0;
+  if (!winner && retry && (offers ?? []).length) {
+    const lastByMechanic = new Map<string, { count: number; lastAt: number; lastStatus: string }>();
+    for (const previous of offers ?? []) {
+      const mechanicId = String(previous.mechanic_id);
+      const previousAt = new Date(previous.created_at).getTime();
+      const entry = lastByMechanic.get(mechanicId);
+      if (!entry) {
+        lastByMechanic.set(mechanicId, { count: 1, lastAt: previousAt, lastStatus: String(previous.status) });
+      } else {
+        entry.count++;
+        if (previousAt > entry.lastAt) {
+          entry.lastAt = previousAt;
+          entry.lastStatus = String(previous.status);
+        }
+      }
+    }
+    const eligibleReoffers = (profiles ?? [])
+      .filter((item: any) => !busy.has(item.user_id))
+      .map((item: any) => ({ score: scoreCandidate(item, request), previous: lastByMechanic.get(item.user_id) }))
+      .filter((item: any) => item.previous &&
+        item.previous.count < 3 &&
+        ["declined", "expired"].includes(item.previous.lastStatus) &&
+        (item.score.distanceKm == null || item.score.distanceKm <= 20))
+      .sort((a: any, b: any) => b.score.matchScore - a.score.matchScore);
+
+    const ready = eligibleReoffers.find((item: any) => (now.getTime() - item.previous.lastAt) >= 10000);
+    winner = ready?.score;
+    if (!winner && eligibleReoffers.length) {
+      retryAfterSeconds = Math.max(1, Math.ceil(
+        (10000 - (now.getTime() - eligibleReoffers[0].previous.lastAt)) / 1000,
+      ));
+    }
+  }
+
   if (!winner) {
-    await service.from("repair_requests").update({ status: "matching" }).eq("id", requestId);
-    return json({ state: "no_provider", requestId });
+    await service.from("repair_requests")
+      .update({ status: "matching" })
+      .eq("id", requestId)
+      .in("status", ["matching", "offered"])
+      .is("mechanic_id", null);
+    return json({
+      state: "no_provider",
+      requestId,
+      retryAfterSeconds,
+      message: retryAfterSeconds > 0
+        ? `The previous mechanic declined. You can retry in ${retryAfterSeconds} seconds.`
+        : "No other verified mechanic is available now. Keep this request open and retry when a provider comes online.",
+    });
   }
 
   const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
@@ -169,6 +225,7 @@ Deno.serve(async (req) => {
   return json({
     state: "offered",
     requestId,
+    reoffered: excludedMechanics.has(winner.candidate.user_id),
     offerId: offer.id,
     expiresAt,
     candidate: {
