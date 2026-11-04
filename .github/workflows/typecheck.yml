@@ -36,3 +36,9 @@ jobs:
           npx expo prebuild --platform android --clean --no-install
           grep -q 'AutoAssistFirebaseMessagingService' android/app/src/main/AndroidManifest.xml
           grep -q 'ExpoFirebaseMessagingService' android/app/src/main/AndroidManifest.xml
+
+      - name: Verify floating overlay Gradle dependencies resolve
+        run: |
+          cd android
+          ./gradlew :autoassist-overlay:dependencies --configuration debugCompileClasspath --no-daemon --console=plain
+
