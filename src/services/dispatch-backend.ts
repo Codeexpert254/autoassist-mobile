@@ -162,6 +162,23 @@ export async function initiateConnectionPayment(requestId: string, phone?: strin
   return data;
 }
 
+export async function checkConnectionPayment(requestId: string): Promise<{
+  state: "not_started" | "pending" | "paid" | "failed";
+  message: string;
+}> {
+  // The server checks the recorded checkout against Safaricom.
+  // A tap on the phone must never mark a payment as paid by itself.
+  const { data, error } = await requireSupabase().functions.invoke("mpesa-check-payment", {
+    body: { requestId },
+  });
+  if (error) return throwFunctionError(error, "Unable to check M-PESA payment status.");
+  if (data?.error) throw new Error(String(data.error));
+  return {
+    state: data?.state ?? "pending",
+    message: String(data?.message ?? "M-PESA has not confirmed the payment yet."),
+  };
+}
+
 export async function getConnectionContact(requestId: string) {
   const { data, error } = await requireSupabase().functions.invoke("get-connection-contact", {
     body: { requestId },
