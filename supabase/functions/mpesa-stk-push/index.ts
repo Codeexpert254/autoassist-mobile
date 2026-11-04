@@ -49,9 +49,7 @@ Deno.serve(async (req) => {
 
   // Avoid replacing the checkout ID while Safaricom may still be processing
   // the previous attempt; otherwise its eventual callback cannot be matched.
-  const initiatedAt = Date.parse(String(existingPayment?.initiated_at ?? ""));
-  if (existingPayment?.status === "pending" && existingPayment.checkout_request_id &&
-      Number.isFinite(initiatedAt) && Date.now() - initiatedAt < 3 * 60 * 1000) {
+  if (existingPayment?.status === "pending" && existingPayment.checkout_request_id) {
     return json({
       state: "pending",
       requestId,
