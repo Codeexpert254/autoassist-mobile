@@ -1,6 +1,5 @@
-import { StaticScreen } from "@/components/autoassist-ui";
-import { motoristScreens } from "@/data/autoassist-screens";
+import DescribeProblemFunctional from "@/components/describe-problem-functional";
 
 export default function DescribeProblem() {
-  return <StaticScreen {...motoristScreens.describeProblem} />;
+  return <DescribeProblemFunctional />;
 }

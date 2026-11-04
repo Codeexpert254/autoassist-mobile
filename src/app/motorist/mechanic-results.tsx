@@ -1,6 +1,5 @@
-import { StaticScreen } from "@/components/autoassist-ui";
-import { motoristScreens } from "@/data/autoassist-screens";
+import MechanicResultsFunctional from "@/components/mechanic-results-functional";
 
 export default function MechanicResults() {
-  return <StaticScreen {...motoristScreens.mechanicResults} />;
+  return <MechanicResultsFunctional />;
 }

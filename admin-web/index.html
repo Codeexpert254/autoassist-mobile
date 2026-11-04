@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>AutoAssist Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="login-view" class="login-shell">
+      <div class="login-card">
+        <div class="brand-mark">AA</div>
+        <p class="eyebrow">AUTOASSIST OPERATIONS</p>
+        <h1>Admin sign in</h1>
+        <p class="muted">Restricted to authorized AutoAssist administrators.</p>
+        <form id="login-form" class="form-stack">
+          <label>Email<input id="login-email" type="email" autocomplete="username" required /></label>
+          <label>Password<input id="login-password" type="password" autocomplete="current-password" required /></label>
+          <button id="login-button" class="button primary" type="submit">Sign in</button>
+          <p id="login-error" class="error-text" hidden></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="admin-view" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand-row"><div class="brand-mark small">AA</div><div><strong>AutoAssist</strong><span>Admin</span></div></div>
+        <nav id="sidebar-nav" class="nav-list">
+          <button data-section="overview" class="nav-item active">Overview</button>
+          <button data-section="verification" class="nav-item">Verification</button>
+          <button data-section="users" class="nav-item">Users</button>
+          <button data-section="jobs" class="nav-item">Live jobs</button>
+          <button data-section="orders" class="nav-item">Orders</button>
+          <button data-section="payments" class="nav-item">Payments</button>
+          <button data-section="sandbox" id="sandbox-nav" class="nav-item" style="display:none">Sandbox testing</button>
+          <button data-section="support" class="nav-item">Support</button>
+          <button data-section="analytics" class="nav-item">Analytics</button>
+          <button data-section="settings" class="nav-item">Admin settings</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="admin-role" class="role-badge"></span>
+          <button id="logout-button" class="text-button">Sign out</button>
+        </div>
+      </aside>
+      <main class="main-panel">
+        <header class="topbar">
+          <div><p class="eyebrow">OPERATIONS CONSOLE</p><h2 id="page-title">Overview</h2></div>
+          <div class="secure-chip">Server-authorized</div>
+        </header>
+        <section id="content" class="content"></section>
+      </main>
+    </div>
+
+    <script src="./config.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

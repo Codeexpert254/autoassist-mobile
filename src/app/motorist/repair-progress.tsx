@@ -1,6 +1,7 @@
-import { StaticScreen } from "@/components/autoassist-ui";
-import { motoristScreens } from "@/data/autoassist-screens";
+import { Redirect } from "expo-router";
 
-export default function RepairProgress() {
-  return <StaticScreen {...motoristScreens.repairProgress} />;
+// Legacy route: AutoAssist now manages the provider connection only.
+// Inspection, quotes, repair progress and labour payments happen offline.
+export default function RedirectOldRepairFlow() {
+  return <Redirect href="/motorist/mechanic-assigned" />;
 }

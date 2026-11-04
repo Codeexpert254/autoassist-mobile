@@ -8,7 +8,8 @@
     "scheme": "autoassist",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "deploymentTarget": "16.4"
     },
     "android": {
       "adaptiveIcon": {
@@ -34,7 +35,43 @@
         }
       ],
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#1857A6",
+          "defaultChannel": "jobs"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow AutoAssist to use your camera to capture verification documents and profile photos.",
+          "photosPermission": "Allow AutoAssist to access your photos when you choose to upload verification images instead of using the camera."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow AutoAssist to use your location to match nearby service requests and mechanics."
+        }
+      ],
+      [
+        "expo-mlkit-ocr",
+        {
+          "iosEngine": "auto"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4",
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
