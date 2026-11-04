@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       service.from("profiles").select("id,role,created_at"),
       service.from("mechanic_profiles").select("user_id,verified,is_available,rating,reviews_count,completed_jobs"),
       service.from("repair_requests").select("id,status,connection_fee_amount,created_at,symptom,location_text"),
-      service.from("connection_payments").select("id,status,amount,created_at,paid_at"),
+      service.from("connection_payments").select("id,status,amount,provider,created_at,paid_at"),
       service.from("ratings").select("rating,created_at"),
     ]);
 
@@ -73,7 +73,9 @@ Deno.serve(async (req) => {
       acc[item.status] = (acc[item.status] ?? 0) + 1;
       return acc;
     }, {});
-    const paidPayments = payments.filter((item) => item.status === "paid");
+    // Simulated payments are never actual M-PESA revenue.
+    const paidPayments = payments.filter((item) => item.status === "paid" && item.provider !== "sandbox_simulator");
+    const simulatedPayments = payments.filter((item) => item.provider === "sandbox_simulator");
     const paidAmount = paidPayments.reduce((sum, item) => sum + toNumber(item.amount), 0);
     const avgRating = ratings.length
       ? ratings.reduce((sum, item) => sum + toNumber(item.rating), 0) / ratings.length
@@ -92,6 +94,7 @@ Deno.serve(async (req) => {
         connectionPayments: payments.length,
         paymentCounts,
         paidConnectionFees: paidAmount,
+        simulatedPayments: simulatedPayments.length,
         ratings: ratings.length,
         averageRating: Number(avgRating.toFixed(2)),
       },
@@ -150,11 +153,16 @@ Deno.serve(async (req) => {
   if (action === "payments") {
     const { data: payments, error } = await service
       .from("connection_payments")
-      .select("id,request_id,motorist_id,mechanic_id,amount,currency,provider,status,phone,mpesa_receipt_number,provider_result_code,provider_result_message,initiated_at,paid_at,failed_at,refunded_at,created_at,updated_at")
+      .select("id,request_id,motorist_id,mechanic_id,amount,currency,provider,status,phone,mpesa_receipt_number,checkout_request_id,provider_result_code,provider_result_message,initiated_at,paid_at,failed_at,refunded_at,created_at,updated_at")
       .order("created_at", { ascending: false })
       .limit(150);
     if (error) return json({ error: error.message }, 500);
-    return json({ items: payments ?? [] });
+    return json({
+      items: (payments ?? []).map(({ checkout_request_id, ...payment }) => ({
+        ...payment,
+        hasOpenCheckout: payment.status === "pending" && Boolean(checkout_request_id),
+      })),
+    });
   }
 
   return json({ error: "Unknown action" }, 400);
