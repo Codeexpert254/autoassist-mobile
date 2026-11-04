@@ -47,6 +47,19 @@ Deno.serve(async (req) => {
   const { data: existingPayment } = await service.from("connection_payments").select("*").eq("request_id", requestId).maybeSingle();
   if (existingPayment?.status === "paid") return json({ state: "paid", requestId, receipt: existingPayment.mpesa_receipt_number });
 
+  // Avoid replacing the checkout ID while Safaricom may still be processing
+  // the previous attempt; otherwise its eventual callback cannot be matched.
+  const initiatedAt = Date.parse(String(existingPayment?.initiated_at ?? ""));
+  if (existingPayment?.status === "pending" && existingPayment.checkout_request_id &&
+      Number.isFinite(initiatedAt) && Date.now() - initiatedAt < 3 * 60 * 1000) {
+    return json({
+      state: "pending",
+      requestId,
+      checkoutRequestId: existingPayment.checkout_request_id,
+      customerMessage: "An M-PESA request is already being processed. Use Check payment status before retrying.",
+    });
+  }
+
   const { data: motoristProfile } = await service.from("profiles").select("phone").eq("id", authData.user.id).single();
   let phone: string;
   try {
