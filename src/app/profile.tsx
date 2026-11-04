@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
+import { SettingsButton } from "@/components/settings-button";
 
 export default function Profile() {
   const router = useRouter();
@@ -34,7 +35,8 @@ export default function Profile() {
           <Pressable onPress={() => router.back()}>
             <Image source={require("../../assets/images/left-arrow.png")} style={styles.backIcon} />
           </Pressable>
-          <Text style={styles.title}>Profile & settings</Text>
+          <Text style={[styles.title, { flex: 1 }]}>Profile & settings</Text>
+          <SettingsButton />
         </View>
         <Text style={styles.subTitle}>Manage identity, contact, security and account information.</Text>
 
@@ -48,6 +50,7 @@ export default function Profile() {
           </View>
         </View>
 
+        <SettingCard title="App & notification settings" subtitle="Notifications, floating job alerts and permissions" onPress={() => router.push("/settings")} />
         <SettingCard title="Personal information" subtitle={displayName} onPress={() => {}} />
         <SettingCard title="Wallet & transactions" subtitle="View payments and service transactions" onPress={() => router.push("/wallet")} />
         <SettingCard title="Payment methods" subtitle={state.paymentMethod} onPress={() => router.push("/payment-methods")} />

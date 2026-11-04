@@ -16,13 +16,11 @@ import {
 import { getMechanicProfile } from "@/services/repair-backend";
 import { getMechanicVerification } from "@/services/mechanic-verification-backend";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { SettingsButton } from "@/components/settings-button";
 import {
   disableFloatingOffers,
   dismissFloatingOffer,
-  enableFloatingOffersForMechanic,
   getFloatingOfferStatus,
-  getFloatingOfferDiagnostics,
-  openFloatingOfferPermissionSettings,
   setFloatingOffersOnline,
 } from "@/services/floating-offers";
 
@@ -38,45 +36,17 @@ export default function Dashboard() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
-  const [checkingNotifications, setCheckingNotifications] = useState(false);
   const [floatingStatus, setFloatingStatus] = useState(getFloatingOfferStatus);
-  const [floatingNotice, setFloatingNotice] = useState("");
-  const [floatingDebug, setFloatingDebug] = useState("");
-  const [floatingBusy, setFloatingBusy] = useState(false);
-
-  const refreshFloatingStatus = () => setFloatingStatus(getFloatingOfferStatus());
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
-    refreshFloatingStatus();
-    const listener = AppState.addEventListener("change", (next) => {
-      if (next === "active") refreshFloatingStatus();
+    const update = () => setFloatingStatus(getFloatingOfferStatus());
+    update();
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") update();
     });
-    return () => listener.remove();
+    return () => sub.remove();
   }, []);
-
-  const toggleFloatingOffers = () => {
-    if (!user || floatingBusy) return;
-    setFloatingBusy(true);
-    try {
-      if (floatingStatus.enabled) {
-        disableFloatingOffers();
-        setFloatingNotice("Floating popups disabled. Standard job notifications remain enabled.");
-      } else if (!floatingStatus.hasPermission) {
-        setFloatingNotice("In Android Settings, grant AutoAssist 'Appear on top'. Return here and tap Enable again.");
-        openFloatingOfferPermissionSettings();
-      } else {
-        enableFloatingOffersForMechanic(user.id);
-        setFloatingOffersOnline(user.id, Boolean(mechanicProfile?.verified && mechanicProfile?.is_available));
-        setFloatingNotice("Floating popups enabled for your mechanic account. Standard notifications stay on as a fallback.");
-      }
-      refreshFloatingStatus();
-    } catch (caught) {
-      setFloatingNotice(caught instanceof Error ? caught.message : "Unable to change the floating popup setting.");
-    } finally {
-      setFloatingBusy(false);
-    }
-  };
 
   const loadProviderState = async () => {
     if (!backendEnabled) {
@@ -215,23 +185,6 @@ export default function Dashboard() {
     }
   };
 
-  const checkPhoneAlerts = async () => {
-    if (!user || checkingNotifications) return;
-    setCheckingNotifications(true);
-    setNotificationMessage("Checking phone notification permissions and registration…");
-    try {
-      const result = await ensureJobNotifications(user.id);
-      setNotificationMessage(result.registered
-        ? "Phone alerts registered. AutoAssist can notify you even when the app is in the background."
-        : result.message);
-    } catch (caught) {
-      setNotificationMessage(caught instanceof Error
-        ? caught.message : "Unable to configure phone notifications.");
-    } finally {
-      setCheckingNotifications(false);
-    }
-  };
-
   const logout = async () => {
     try {
       if (user && mechanicProfile?.verified && mechanicProfile?.is_available) {
@@ -291,7 +244,9 @@ export default function Dashboard() {
                 <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
                 <Text style={styles.title}>Welcome, {firstName}</Text>
               </View>
-              <Pressable onPress={() => void logout()} style={styles.logoutButton}>
+              <SettingsButton />
+              <SettingsButton />
+            <Pressable onPress={() => void logout()} style={styles.logoutButton}>
                 <Text style={styles.logoutText}>Logout</Text>
               </Pressable>
             </View>
@@ -409,47 +364,21 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
-          <Pressable style={styles.refreshButton} disabled={checkingNotifications} onPress={() => void checkPhoneAlerts()}>
-            {checkingNotifications
-              ? <ActivityIndicator color="#1857A6" />
-              : <Text style={styles.refreshText}>Check phone notification setup</Text>}
-          </Pressable>
-          {Platform.OS === "android" ? (
-            <View style={styles.profileCard}>
-              <Text style={styles.cardTitle}>Floating job popups</Text>
-              <Text style={styles.cardText}>
-                Optional: show a short-lived job card above other apps when AutoAssist is in the background.
-                You must explicitly allow AutoAssist to appear on top in Android Settings.
-                When unavailable, regular phone notifications still work.
-              </Text>
-              <Pressable
-                style={styles.refreshButton}
-                disabled={floatingBusy || !floatingStatus.supported}
-                onPress={toggleFloatingOffers}
-              >
-                <Text style={styles.refreshText}>
-                  {!floatingStatus.supported
-                    ? "Available after installing the new Android APK"
-                    : floatingStatus.enabled
-                      ? "Disable floating job popups"
-                      : floatingStatus.hasPermission
-                        ? "Enable floating job popups"
-                        : "Allow 'Appear on top' for AutoAssist"}
+          {Platform.OS === "android" && floatingStatus.supported && !(floatingStatus.enabled && floatingStatus.hasPermission) ? (
+            <View style={styles.alertSetupCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Get job alerts over other apps</Text>
+                <Text style={styles.cardText}>
+                  Set up floating job alerts so you can see new requests while using your phone. Android asks you to approve "Appear on top" once.
                 </Text>
+              </View>
+              <Pressable
+                style={styles.setupButton}
+                accessibilityRole="button"
+                onPress={() => router.push("/settings")}
+              >
+                <Text style={styles.setupButtonText}>Set up</Text>
               </Pressable>
-              {floatingNotice ? <Text style={styles.cardText}>{floatingNotice}</Text> : null}
-              <Pressable style={styles.refreshButton} onPress={() => {
-                const d = getFloatingOfferDiagnostics();
-                const time = Number(d.lastFcmAt);
-                setFloatingDebug(
-                  `Permission: ${d.permission} • Enabled: ${d.enabled} • Online: ${d.online}\n` +
-                  `Last native data alert: ${time > 0 ? new Date(time).toLocaleString() : "none received"}\n` +
-                  `Last result: ${d.lastDecision}`
-                );
-              }}>
-                <Text style={styles.refreshText}>Check background popup diagnostics</Text>
-              </Pressable>
-              {floatingDebug ? <Text style={styles.cardText}>{floatingDebug}</Text> : null}
             </View>
           ) : null}
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
@@ -567,6 +496,9 @@ const styles = StyleSheet.create({
   offlineButton: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#1857A6" },
   offlineButtonText: { color: "#1857A6" },
   successNotice: { color: "#176B45", backgroundColor: "#EFFAF4", borderRadius: 10, padding: 10, fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 12 },
+  alertSetupCard: { backgroundColor: "#F0F7FF", borderColor: "#B8D2F0", borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginTop: 14 },
+  setupButton: { backgroundColor: "#1857A6", borderRadius: 9, minHeight: 40, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  setupButtonText: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   metricsRow: { flexDirection: "row", gap: 8, marginTop: 16 },
   metricCard: { flex: 1, borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 12, paddingVertical: 13, alignItems: "center", backgroundColor: "#FFFFFF" },
   metricValue: { color: "#102A43", fontSize: 16, fontFamily: "Inter_600SemiBold" },

@@ -10,6 +10,7 @@ import { useDemoApp } from "@/context/demo-app-context";
 import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
 import { normalizePowerSource } from "@/services/vehicle-backend";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { SettingsButton } from "@/components/settings-button";
 
 const quickServices = [
   {
@@ -97,6 +98,7 @@ export default function Home() {
         <View style={styles.heading}>
           <Text style={styles.subTitle}>Good afternoon</Text>
           <View style={styles.headerActions}>
+            <SettingsButton />
             {!backendEnabled ? (
               <Pressable onPress={() => router.push("/preview")}>
                 <Text style={styles.previewLink}>Preview</Text>

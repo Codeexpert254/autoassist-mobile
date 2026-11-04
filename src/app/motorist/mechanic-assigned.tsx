@@ -93,10 +93,10 @@ export default function MechanicAssigned() {
         review: review.trim().slice(0, 1000),
       });
       if (result.error) throw result.error;
-      // The database atomically changes repair-complete -> completed when
-      // the authenticated motorist submits the rating.
-      await load();
+      // After successful save and the atomic job completion, update local
+      // state and return to the dashboard. Errors keep the rating form open.
       await refreshBackend();
+      router.replace("/motorist/home");
     } catch (caught) {
       setRatingError(caught instanceof Error ? caught.message : "Unable to submit your rating.");
       await load();
