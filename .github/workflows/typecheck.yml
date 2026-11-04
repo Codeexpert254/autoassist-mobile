@@ -5,6 +5,7 @@ on:
     branches:
       - motorist-mechanic-functional
       - feature/android-floating-mechanic-offers
+      - feature/parts-dealer-dashboard
   pull_request:
     branches:
       - functional-demo
