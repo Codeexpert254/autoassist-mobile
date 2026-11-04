@@ -1,10 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
+import { useRepairFlow } from "@/context/repair-flow-context";
+import { updateRepairStatus } from "@/services/repair-backend";
 import {
   checkConnectionPayment,
   getConnectionPayment,
@@ -17,6 +19,7 @@ export default function ConnectionPayment() {
   const params = useLocalSearchParams<{ requestId?: string }>();
   const requestId = Array.isArray(params.requestId) ? params.requestId[0] : params.requestId;
   const { profile } = useAuth();
+  const { refreshBackend } = useRepairFlow();
 
   const [request, setRequest] = useState<any>(null);
   const [payment, setPayment] = useState<any>(null);
@@ -24,6 +27,7 @@ export default function ConnectionPayment() {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [statusNotice, setStatusNotice] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -104,6 +108,65 @@ export default function ConnectionPayment() {
     } finally {
       setPaying(false);
     }
+  };
+
+  const confirmCancel = () => {
+    if (!requestId || paying || checking || cancelling) return;
+    const unresolvedCheckout = payment?.status === "pending" && Boolean(payment?.checkout_request_id);
+    Alert.alert(
+      "Cancel repair request?",
+      unresolvedCheckout
+        ? "This cancels the mechanic service, NOT the M-PESA checkout. Safaricom may still confirm a payment. Check your M-PESA history and contact support if money was deducted. The pending transaction will be kept for reconciliation."
+        : "This cancels your mechanic request. Any completed payment is handled separately. Are you sure?",
+      [
+        { text: "Keep request", style: "cancel" },
+        {
+          text: "Cancel request",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setCancelling(true);
+              setError("");
+              setStatusNotice("");
+              try {
+                // Re-check server state rather than relying on stale screen data.
+                // Never claim a pending checkout was cancelled or erase its record.
+                const [requestResult, paymentResult] = await Promise.all([
+                  getDispatchRequest(requestId),
+                  getConnectionPayment(requestId),
+                ]);
+                if (requestResult.error) throw requestResult.error;
+                if (paymentResult.error) throw paymentResult.error;
+                const liveRequest = requestResult.data;
+                const livePayment = paymentResult.data;
+                if (liveRequest?.status === "cancelled") {
+                  await refreshBackend();
+                  router.replace("/motorist/home");
+                  return;
+                }
+                if (livePayment?.status === "paid" || liveRequest?.contact_unlocked_at) {
+                  throw new Error("Payment is already confirmed. Review the connection before cancelling; a refund may be needed.");
+                }
+                if (!["matching", "offered", "requested", "accepted"].includes(String(liveRequest?.status))) {
+                  throw new Error("This repair request can no longer be cancelled from the payment screen.");
+                }
+
+                // Cancel only the service. connection_payments and checkout IDs
+                // are never modified, preserving future Daraja reconciliation.
+                const cancelled = await updateRepairStatus(requestId, "cancelled");
+                if (cancelled.error) throw cancelled.error;
+                await refreshBackend();
+                router.replace("/motorist/home");
+              } catch (caught) {
+                setError(caught instanceof Error ? caught.message : "Unable to cancel this repair request.");
+              } finally {
+                setCancelling(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
@@ -220,6 +283,25 @@ export default function ConnectionPayment() {
           </Pressable>
 
           <Text style={styles.securityText}>This button checks M-PESA securely through AutoAssist. Contact details unlock only after a confirmed callback or verified Daraja status result.</Text>
+
+          <Pressable
+            style={[styles.cancelButton, (paying || checking || cancelling) && styles.disabledRefreshButton]}
+            disabled={paying || checking || cancelling}
+            onPress={confirmCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel repair request"
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color="#B42318" />
+            ) : (
+              <Text style={styles.cancelText}>Cancel repair request</Text>
+            )}
+          </Pressable>
+          <Text style={styles.cancelHint}>
+            {checkoutPending
+              ? "Cancelling the service does not cancel your pending M-PESA checkout or erase its record."
+              : "Cancel the service request if you no longer need a mechanic."}
+          </Text>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -267,4 +349,7 @@ const styles = StyleSheet.create({
   statusNoticeText: { flex: 1, color: "#1857A6", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular" },
   refreshText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   securityText: { color: "#667085", fontSize: 9, lineHeight: 14, textAlign: "center", fontFamily: "Inter_400Regular", marginTop: 16 },
+  cancelButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: "#B42318", alignItems: "center", justifyContent: "center", marginTop: 18 },
+  cancelText: { color: "#B42318", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  cancelHint: { color: "#667085", fontSize: 9, lineHeight: 14, textAlign: "center", marginTop: 6, fontFamily: "Inter_400Regular" },
 });
