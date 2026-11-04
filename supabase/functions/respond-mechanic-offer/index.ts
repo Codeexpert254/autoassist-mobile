@@ -49,7 +49,7 @@ async function sendPush(service: any, userId: string, payload: { title: string; 
     sound: "default",
     priority: "high",
     ...payload,
-    channelId: payload.data.type === "mechanic_offer" ? "incoming-requests" : "jobs",
+    channelId: payload.data.type === "mechanic_offer" ? "incoming-requests-v2" : "jobs",
   }));
   if (messages.length === 0) return;
   await fetch("https://exp.host/--/api/v2/push/send", {
