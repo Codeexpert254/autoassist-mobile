@@ -44,13 +44,32 @@ async function sendPush(service: any, userId: string, payload: { title: string; 
     .select("expo_push_token")
     .eq("user_id", userId)
     .eq("enabled", true);
-  const messages = (tokens ?? []).map((item: any) => ({
-    to: item.expo_push_token,
-    sound: "default",
-    priority: "high",
-    ...payload,
-    channelId: payload.data.type === "mechanic_offer" ? "incoming-requests-v2" : "jobs",
-  }));
+  const isMechanicOffer = payload.data.type === "mechanic_offer";
+  const messages = (tokens ?? []).flatMap((item: any) => [
+    {
+      to: item.expo_push_token,
+      sound: "default",
+      priority: "high",
+      ...payload,
+      channelId: isMechanicOffer ? "incoming-requests-v2" : "jobs",
+    },
+    ...(isMechanicOffer ? [{
+      to: item.expo_push_token,
+      priority: "high",
+      ttl: 120,
+      data: {
+        type: "mechanic_offer_overlay",
+        recipientId: userId,
+        offerId: String(payload.data.offerId ?? ""),
+        requestId: String(payload.data.requestId ?? ""),
+        expiresAtMs: String(payload.data.expiresAtMs ?? ""),
+        symptom: String(payload.data.symptom ?? "").slice(0, 60),
+        description: String(payload.data.description ?? "").slice(0, 150),
+        locationText: String(payload.data.locationText ?? "").slice(0, 90),
+        preferredTime: String(payload.data.preferredTime ?? "").slice(0, 60),
+      },
+    }] : []),
+  ]);
   if (messages.length === 0) return;
   await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
@@ -114,7 +133,17 @@ async function dispatchNext(service: any, request: any) {
   await sendPush(service, winner.candidate.user_id, {
     title: `New ${String(request.symptom).slice(0, 25)} request nearby`,
     body: `${String(request.description).slice(0, 95)} • ${String(request.location_text).slice(0, 45)} • ${String(request.preferred_time).slice(0, 30)}`,
-    data: { type: "mechanic_offer", route: "/mechanic/job-offer", offerId: offer.id, requestId: request.id },
+    data: {
+      type: "mechanic_offer",
+      route: "/mechanic/job-offer",
+      offerId: offer.id,
+      requestId: request.id,
+      expiresAtMs: String(new Date(expiresAt).getTime()),
+      symptom: String(request.symptom ?? ""),
+      description: String(request.description ?? ""),
+      locationText: String(request.location_text ?? ""),
+      preferredTime: String(request.preferred_time ?? ""),
+    },
   }).catch((error) => console.error("Push failed", error));
 
   return offer;

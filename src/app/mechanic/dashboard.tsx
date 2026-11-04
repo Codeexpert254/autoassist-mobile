@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -16,6 +16,13 @@ import {
 import { getMechanicProfile } from "@/services/repair-backend";
 import { getMechanicVerification } from "@/services/mechanic-verification-backend";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import {
+  disableFloatingOffers,
+  dismissFloatingOffer,
+  enableFloatingOffersForMechanic,
+  getFloatingOfferStatus,
+  openFloatingOfferPermissionSettings,
+} from "@/services/floating-offers";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -30,6 +37,42 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [checkingNotifications, setCheckingNotifications] = useState(false);
+  const [floatingStatus, setFloatingStatus] = useState(getFloatingOfferStatus);
+  const [floatingNotice, setFloatingNotice] = useState("");
+  const [floatingBusy, setFloatingBusy] = useState(false);
+
+  const refreshFloatingStatus = () => setFloatingStatus(getFloatingOfferStatus());
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    refreshFloatingStatus();
+    const listener = AppState.addEventListener("change", (next) => {
+      if (next === "active") refreshFloatingStatus();
+    });
+    return () => listener.remove();
+  }, []);
+
+  const toggleFloatingOffers = () => {
+    if (!user || floatingBusy) return;
+    setFloatingBusy(true);
+    try {
+      if (floatingStatus.enabled) {
+        disableFloatingOffers();
+        setFloatingNotice("Floating popups disabled. Standard job notifications remain enabled.");
+      } else if (!floatingStatus.hasPermission) {
+        setFloatingNotice("In Android Settings, grant AutoAssist 'Appear on top'. Return here and tap Enable again.");
+        openFloatingOfferPermissionSettings();
+      } else {
+        enableFloatingOffersForMechanic(user.id);
+        setFloatingNotice("Floating popups enabled for your mechanic account. Standard notifications stay on as a fallback.");
+      }
+      refreshFloatingStatus();
+    } catch (caught) {
+      setFloatingNotice(caught instanceof Error ? caught.message : "Unable to change the floating popup setting.");
+    } finally {
+      setFloatingBusy(false);
+    }
+  };
 
   const loadProviderState = async () => {
     if (!backendEnabled) {
@@ -131,6 +174,7 @@ export default function Dashboard() {
     try {
       if (!available) {
         const result = await updateMechanicAvailability(user.id, false);
+        dismissFloatingOffer();
         if (result.error) throw result.error;
         setMechanicProfile(result.data);
         setNotificationMessage("You are offline. AutoAssist will not offer new requests until you go online again.");
@@ -189,6 +233,7 @@ export default function Dashboard() {
     } catch {
       // Signing out is more important than an availability cleanup failure.
     }
+    disableFloatingOffers();
     await signOut();
     router.replace({ pathname: "/login", params: { role: "mechanic" } });
   };
@@ -362,6 +407,32 @@ export default function Dashboard() {
               ? <ActivityIndicator color="#1857A6" />
               : <Text style={styles.refreshText}>Check phone notification setup</Text>}
           </Pressable>
+          {Platform.OS === "android" ? (
+            <View style={styles.profileCard}>
+              <Text style={styles.cardTitle}>Floating job popups</Text>
+              <Text style={styles.cardText}>
+                Optional: show a short-lived job card above other apps when AutoAssist is in the background.
+                You must explicitly allow AutoAssist to appear on top in Android Settings.
+                When unavailable, regular phone notifications still work.
+              </Text>
+              <Pressable
+                style={styles.refreshButton}
+                disabled={floatingBusy || !floatingStatus.supported}
+                onPress={toggleFloatingOffers}
+              >
+                <Text style={styles.refreshText}>
+                  {!floatingStatus.supported
+                    ? "Available after installing the new Android APK"
+                    : floatingStatus.enabled
+                      ? "Disable floating job popups"
+                      : floatingStatus.hasPermission
+                        ? "Enable floating job popups"
+                        : "Allow 'Appear on top' for AutoAssist"}
+                </Text>
+              </Pressable>
+              {floatingNotice ? <Text style={styles.cardText}>{floatingNotice}</Text> : null}
+            </View>
+          ) : null}
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
           {error ? <Text style={styles.errorTextStandalone}>{error}</Text> : null}
 
