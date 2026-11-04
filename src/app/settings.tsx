@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/auth-context";
 import { requireSupabase } from "@/lib/supabase";
 import { getMechanicProfile } from "@/services/repair-backend";
+import { ownShop } from "@/services/parts-data";
 import { ensureJobNotifications } from "@/services/push-notifications";
 import {
   disableFloatingOffers,
@@ -22,7 +23,11 @@ export default function Settings() {
   const router = useRouter();
   const { user, profile } = useAuth();
   const isMechanic = Boolean(user && profile?.role === "mechanic");
+  const isDealer = Boolean(user && profile?.role === "partsdealer");
+  const overlayRole = isMechanic || isDealer;
   const [mechanic, setMechanic] = useState<any>(null);
+  const [dealerShop, setDealerShop] = useState<any>(null);
+  const [loadingDealer, setLoadingDealer] = useState(isDealer);
   const [loadingMechanic, setLoadingMechanic] = useState(isMechanic);
   const [floating, setFloating] = useState(getFloatingOfferStatus);
   const [pushGranted, setPushGranted] = useState<boolean | null>(null);
@@ -32,7 +37,9 @@ export default function Settings() {
   const [admin, setAdmin] = useState(false);
   const askedForOverlay = useRef(false);
   const mechRef = useRef<any>(null);
-  mechRef.current = mechanic;
+  mechRef.current = isDealer ? dealerShop : mechanic;
+  const overlayApproved = isDealer ? dealerShop?.verification_status === "approved" : mechanic?.verified;
+  const overlayOnline = isDealer ? dealerShop?.is_open : mechanic?.is_available;
 
   const refreshPermissions = async () => {
     setFloating(getFloatingOfferStatus());
@@ -65,18 +72,27 @@ export default function Settings() {
   }, [user?.id, isMechanic]);
 
   useEffect(() => {
-    if (Platform.OS !== "android" || !isMechanic || !user) return;
+    if (!user || !isDealer) { setLoadingDealer(false); return; }
+    let mounted = true;
+    void ownShop(user.id).then(shop => {
+      if (mounted) { setDealerShop(shop); setLoadingDealer(false); }
+    }).catch(() => { if (mounted) setLoadingDealer(false); });
+    return () => { mounted = false; };
+  }, [user?.id, isDealer]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android" || !overlayRole || !user) return;
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
       const current = getFloatingOfferStatus();
       // The mechanic explicitly tapped Enable before Android's settings
       // page opened. On permission grant, enable automatically: no second
       // tap and no permission-bypass or repeated permission nagging.
-      if (askedForOverlay.current && current.hasPermission && mechRef.current?.verified) {
+      if (askedForOverlay.current && current.hasPermission && (isDealer ? mechRef.current?.verification_status === "approved" : mechRef.current?.verified)) {
         try {
           enableFloatingOffersForMechanic(user.id);
-          setFloatingOffersOnline(user.id, Boolean(mechRef.current.is_available));
-          setMessage("Floating job alerts are on. They appear when you are online.");
+          setFloatingOffersOnline(user.id, Boolean(isDealer ? mechRef.current.is_open : mechRef.current.is_available));
+          setMessage("Floating alerts are active whenever your account is available.");
         } catch (error) {
           setMessage(error instanceof Error ? error.message : "Unable to enable floating alerts.");
         }
@@ -85,10 +101,10 @@ export default function Settings() {
       void refreshPermissions();
     });
     return () => sub.remove();
-  }, [isMechanic, user?.id]);
+  }, [overlayRole, isDealer, user?.id]);
 
   const toggleFloating = (on: boolean) => {
-    if (!isMechanic || !user || busy || loadingMechanic) return;
+    if (!overlayRole || !user || busy || loadingMechanic || loadingDealer) return;
     setBusy(true);
     setMessage("");
     try {
@@ -97,8 +113,8 @@ export default function Settings() {
         askedForOverlay.current = false;
         disableFloatingOffers();
         setMessage("Floating job alerts are off. Standard push notifications can still arrive.");
-      } else if (!mechanic?.verified) {
-        setMessage("Complete mechanic verification before enabling floating job alerts.");
+      } else if (!overlayApproved) {
+        setMessage(isDealer ? "Your parts shop needs approval first." : "Complete mechanic verification before enabling floating job alerts.");
       } else if (!floating.supported) {
         setMessage("Floating alerts require the AutoAssist Android build.");
       } else if (!floating.hasPermission) {
@@ -107,8 +123,8 @@ export default function Settings() {
         openFloatingOfferPermissionSettings();
       } else {
         enableFloatingOffersForMechanic(user.id);
-        setFloatingOffersOnline(user.id, Boolean(mechanic.is_available));
-        setMessage("Floating job alerts are on. They appear when you are online.");
+        setFloatingOffersOnline(user.id, Boolean(overlayOnline));
+        setMessage("Floating alerts are active whenever your account is available.");
       }
       setFloating(getFloatingOfferStatus());
     } catch (error) {
@@ -162,18 +178,18 @@ export default function Settings() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          {isMechanic && Platform.OS === "android" ? (
+          {overlayRole && Platform.OS === "android" ? (
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Floating job alerts</Text>
+              <Text style={styles.sectionTitle}>{isDealer ? "Floating parts-order alerts" : "Floating job alerts"}</Text>
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.settingTitle}>Show over other apps</Text>
-                  <Text style={styles.helper}>Display incoming job requests while using other applications. Works when your verified mechanic account is online.</Text>
+                  <Text style={styles.helper}>Display incoming {isDealer ? "parts orders" : "job requests"} above other apps while your verified account is available.</Text>
                 </View>
                 <Switch
                   accessibilityLabel="Show floating job alerts over other apps"
                   value={floatingActive}
-                  disabled={busy || loadingMechanic || !floating.supported || (!mechanic?.verified && !floatingActive)}
+                  disabled={busy || loadingMechanic || loadingDealer || !floating.supported || (!overlayApproved && !floatingActive)}
                   onValueChange={toggleFloating}
                   trackColor={{ false: "#D0D5DD", true: "#A9C2DF" }}
                   thumbColor={floatingActive ? "#1857A6" : "#F4F4F4"}
