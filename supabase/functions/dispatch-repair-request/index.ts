@@ -56,15 +56,37 @@ async function sendPush(service: any, userId: string, requestId: string, offerId
     .eq("user_id", userId)
     .eq("enabled", true);
 
-  const messages = (tokens ?? []).map((item: any) => ({
-    to: item.expo_push_token,
-    sound: "default",
-    priority: "high",
-    channelId: "incoming-requests-v2",
-    title: `New ${String(request.symptom).slice(0, 25)} request nearby`,
-    body: `${String(request.description).slice(0, 95)} • ${String(request.location_text).slice(0, 45)} • ${String(request.preferred_time).slice(0, 30)}`,
-    data: { type: "mechanic_offer", route: "/mechanic/job-offer", offerId, requestId },
-  }));
+  const expiresAtMs = String(Date.now() + 2 * 60 * 1000);
+  const messages = (tokens ?? []).flatMap((item: any) => [
+    {
+      to: item.expo_push_token,
+      sound: "default",
+      priority: "high",
+      channelId: "incoming-requests-v2",
+      title: `New ${String(request.symptom).slice(0, 25)} request nearby`,
+      body: `${String(request.description).slice(0, 95)} • ${String(request.location_text).slice(0, 45)} • ${String(request.preferred_time).slice(0, 30)}`,
+      data: { type: "mechanic_offer", route: "/mechanic/job-offer", offerId, requestId },
+    },
+    // Data-only push awakens the custom native FCM service for an optional
+    // Android floating overlay. Ordinary push above is retained as fallback.
+    // Never use "title"/"body" or data.title/data.message here.
+    {
+      to: item.expo_push_token,
+      priority: "high",
+      ttl: 120,
+      data: {
+        type: "mechanic_offer_overlay",
+        recipientId: userId,
+        requestId,
+        offerId,
+        expiresAtMs,
+        symptom: String(request.symptom ?? "").slice(0, 60),
+        description: String(request.description ?? "").slice(0, 150),
+        locationText: String(request.location_text ?? "").slice(0, 90),
+        preferredTime: String(request.preferred_time ?? "").slice(0, 60),
+      },
+    },
+  ]);
 
   if (messages.length === 0) return;
   await fetch("https://exp.host/--/api/v2/push/send", {

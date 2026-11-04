@@ -16,6 +16,12 @@ import {
 import { getMechanicProfile } from "@/services/repair-backend";
 import { getMechanicVerification } from "@/services/mechanic-verification-backend";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { SettingsButton } from "@/components/settings-button";
+import {
+  disableFloatingOffers,
+  dismissFloatingOffer,
+  setFloatingOffersOnline,
+} from "@/services/floating-offers";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -29,8 +35,6 @@ export default function Dashboard() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
-  const [checkingNotifications, setCheckingNotifications] = useState(false);
-
   const loadProviderState = async () => {
     if (!backendEnabled) {
       setLoading(false);
@@ -49,6 +53,7 @@ export default function Dashboard() {
       if (mechanicResult.error) throw mechanicResult.error;
       const mechanic = mechanicResult.data as any;
       setMechanicProfile(mechanic);
+      setFloatingOffersOnline(user.id, Boolean(mechanic?.verified && mechanic?.is_available));
 
       if (!mechanic) {
         setVerificationStatus("not-submitted");
@@ -132,6 +137,8 @@ export default function Dashboard() {
       if (!available) {
         const result = await updateMechanicAvailability(user.id, false);
         if (result.error) throw result.error;
+        setFloatingOffersOnline(user.id, false);
+        dismissFloatingOffer();
         setMechanicProfile(result.data);
         setNotificationMessage("You are offline. AutoAssist will not offer new requests until you go online again.");
         return;
@@ -149,6 +156,7 @@ export default function Dashboard() {
       });
       if (result.error) throw result.error;
       setMechanicProfile(result.data);
+      setFloatingOffersOnline(user.id, true);
 
       const push = await ensureJobNotifications(user.id);
       setNotificationMessage(
@@ -164,23 +172,6 @@ export default function Dashboard() {
     }
   };
 
-  const checkPhoneAlerts = async () => {
-    if (!user || checkingNotifications) return;
-    setCheckingNotifications(true);
-    setNotificationMessage("Checking phone notification permissions and registration…");
-    try {
-      const result = await ensureJobNotifications(user.id);
-      setNotificationMessage(result.registered
-        ? "Phone alerts registered. AutoAssist can notify you even when the app is in the background."
-        : result.message);
-    } catch (caught) {
-      setNotificationMessage(caught instanceof Error
-        ? caught.message : "Unable to configure phone notifications.");
-    } finally {
-      setCheckingNotifications(false);
-    }
-  };
-
   const logout = async () => {
     try {
       if (user && mechanicProfile?.verified && mechanicProfile?.is_available) {
@@ -189,6 +180,7 @@ export default function Dashboard() {
     } catch {
       // Signing out is more important than an availability cleanup failure.
     }
+    disableFloatingOffers();
     await signOut();
     router.replace({ pathname: "/login", params: { role: "mechanic" } });
   };
@@ -239,6 +231,7 @@ export default function Dashboard() {
                 <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
                 <Text style={styles.title}>Welcome, {firstName}</Text>
               </View>
+              <SettingsButton />
               <Pressable onPress={() => void logout()} style={styles.logoutButton}>
                 <Text style={styles.logoutText}>Logout</Text>
               </Pressable>
@@ -322,6 +315,7 @@ export default function Dashboard() {
               <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
               <Text style={styles.title}>Welcome, {firstName}</Text>
             </View>
+            <SettingsButton />
             <Pressable onPress={() => void logout()} style={styles.logoutButton}>
               <Text style={styles.logoutText}>Logout</Text>
             </Pressable>
@@ -357,11 +351,6 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
-          <Pressable style={styles.refreshButton} disabled={checkingNotifications} onPress={() => void checkPhoneAlerts()}>
-            {checkingNotifications
-              ? <ActivityIndicator color="#1857A6" />
-              : <Text style={styles.refreshText}>Check phone notification setup</Text>}
-          </Pressable>
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
           {error ? <Text style={styles.errorTextStandalone}>{error}</Text> : null}
 

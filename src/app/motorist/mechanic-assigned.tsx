@@ -93,10 +93,10 @@ export default function MechanicAssigned() {
         review: review.trim().slice(0, 1000),
       });
       if (result.error) throw result.error;
-      // The database atomically changes repair-complete -> completed when
-      // the authenticated motorist submits the rating.
-      await load();
+      // After successful save and the atomic job completion, update local
+      // state and return to the dashboard. Errors keep the rating form open.
       await refreshBackend();
+      router.replace("/motorist/home");
     } catch (caught) {
       setRatingError(caught instanceof Error ? caught.message : "Unable to submit your rating.");
       await load();
@@ -191,16 +191,40 @@ export default function MechanicAssigned() {
                 <Detail label="Request status" value={statusLabel} />
 
                 {contact.phone ? (
-                  <>
-                    <Pressable style={styles.primaryButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
-                      <Text style={styles.primaryText}>Call mechanic</Text>
+                  <View style={styles.contactRow}>
+                    <Pressable style={[styles.contactAction, styles.contactCall]}
+                      accessibilityRole="button" accessibilityLabel="Call mechanic"
+                      onPress={() => void Linking.openURL(`tel:${String(contact.phone).replace(/[^0-9+]/g, "")}`)}>
+                      <SymbolView name={{ ios: "phone.fill", android: "call", web: "call" } as never} size={18} tintColor="#FFFFFF" />
+                      <Text style={styles.contactCallText}>Call</Text>
                     </Pressable>
-                    <Pressable style={styles.outlineButton} onPress={() => void Linking.openURL(`sms:${contact.phone}`)}>
-                      <Text style={styles.outlineText}>Message mechanic (SMS)</Text>
+                    <Pressable style={[styles.contactAction, styles.contactMessage]}
+                      accessibilityRole="button" accessibilityLabel="Message mechanic"
+                      onPress={() => void Linking.openURL(`sms:${String(contact.phone).replace(/[^0-9+]/g, "")}`)}>
+                      <SymbolView name={{ ios: "message.fill", android: "sms", web: "sms" } as never} size={18} tintColor="#1857A6" />
+                      <Text style={styles.contactMessageText}>Message</Text>
                     </Pressable>
-                  </>
+                  </View>
                 ) : null}
               </View>
+
+              {["en-route", "arrived"].includes(String(request?.status)) && request?.latitude != null && request?.longitude != null ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Track mechanic on a live map"
+                  style={styles.trackButton}
+                  onPress={() => router.push({ pathname: "/motorist/track-mechanic", params: { requestId: requestId! } })}
+                >
+                  <SymbolView name={{ ios: "location.fill", android: "my_location", web: "my_location" } as never}
+                    size={19} tintColor="#FFFFFF" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.trackTitle}>{request?.status === "arrived" ? "View arrival location" : "Track mechanic live"}</Text>
+                    <Text style={styles.trackSubtitle}>{request?.status === "arrived" ? "Your mechanic has reached the service location" : "See your mechanic moving toward you on the map"}</Text>
+                  </View>
+                  <SymbolView name={{ ios: "chevron.right", android: "chevron_right", web: "chevron_right" } as never}
+                    size={18} tintColor="#FFFFFF" />
+                </Pressable>
+              ) : null}
 
               <View style={styles.noteCard}>
                 <Text style={styles.noteTitle}>AutoAssist connects you with a provider</Text>
@@ -323,6 +347,15 @@ const styles = StyleSheet.create({
   detailValue: { color: "#102A43", fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular", marginTop: 3, textTransform: "capitalize" },
   primaryButton: { minHeight: 47, borderRadius: 11, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 16, alignSelf: "stretch" },
   primaryText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  contactRow: { marginTop: 13, flexDirection: "row", gap: 12, justifyContent: "space-between" },
+  contactAction: { flex: 1, minHeight: 46, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  contactCall: { backgroundColor: "#1857A6" },
+  contactMessage: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#1857A6" },
+  contactCallText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  contactMessageText: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  trackButton: { minHeight: 65, backgroundColor: "#1857A6", paddingHorizontal: 15, paddingVertical: 12, borderRadius: 14, marginTop: 14, flexDirection: "row", alignItems: "center", gap: 12 },
+  trackTitle: { color: "#FFFFFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  trackSubtitle: { color: "#E5F0FD", fontSize: 10, marginTop: 3, lineHeight: 14, fontFamily: "Inter_400Regular" },
   noteCard: { backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F5D48A", borderRadius: 13, padding: 14, marginTop: 14 },
   progressCard: { borderRadius: 14, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#F5F9FE", padding: 16, marginTop: 14 },
   progressTitle: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
