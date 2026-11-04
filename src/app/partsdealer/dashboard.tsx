@@ -8,6 +8,7 @@ import { type PartsShop, type PartOrder, type Part, ownShop, shopOrders,
   inventoryFor, updateShop, subscribeShopOrders, money } from "@/services/parts-data";
 import { ensureJobNotifications } from "@/services/push-notifications";
 import { setFloatingOffersOnline } from "@/services/floating-offers";
+import { requestRiderDispatch } from "@/services/parts-orders";
 
 export default function PartsDealerDashboard() {
   const router=useRouter();
@@ -20,6 +21,7 @@ export default function PartsDealerDashboard() {
   const [popup,setPopup]=useState<PartOrder|null>(null);
   const seen=useRef<Set<string>>(new Set());
   const initialized=useRef(false);
+  const lastRiderMatching=useRef<Record<string,number>>({});
   const eligible=profile?.role==="partsdealer" ||
     (profile?.role==="mechanic"&&profile?.provider_type==="garage");
 
@@ -32,6 +34,18 @@ export default function PartsDealerDashboard() {
         setFloatingOffersOnline(user.id, s.verification_status==="approved" && s.is_open);
         const [o,i]=await Promise.all([shopOrders(s.id),inventoryFor(s.id)]);
         setOrders(o);setInventory(i);
+        // A rider can decline or let an offer expire. Recheck only while the
+        // dealer dashboard is open; the backend deduplicates active offers.
+        if(s.verification_status==="approved" && s.is_open){
+          const now=Date.now();
+          for(const order of o.filter(order=>order.status==="ready_for_pickup").slice(0,10)){
+            if(now-(lastRiderMatching.current[order.id]??0)<45000)continue;
+            lastRiderMatching.current[order.id]=now;
+            void requestRiderDispatch(order.id).catch(error=>{
+              console.warn("Rider matching retry unavailable",error);
+            });
+          }
+        }
         const pending=o.filter(order=>order.status==="pending_dealer");
         if(!initialized.current){pending.forEach(order=>seen.current.add(order.id));initialized.current=true;}
         else{

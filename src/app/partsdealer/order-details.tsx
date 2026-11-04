@@ -5,7 +5,7 @@ import { Alert, Linking, Text, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
 import { Action, Notice, PartsPage, Section, Status, partStyles, NAVY } from "@/components/parts-ui";
 import { type PartOrder, money, oneOrder } from "@/services/parts-data";
-import { readyForRider, respondToPartOrder } from "@/services/parts-orders";
+import { readyForRider, requestRiderDispatch, respondToPartOrder } from "@/services/parts-orders";
 
 export default function DealerOrderDetails(){
   const router=useRouter(),p=useLocalSearchParams<{orderId?:string}>();
@@ -22,15 +22,20 @@ export default function DealerOrderDetails(){
     finally{setLoading(false);}
   };
   useEffect(()=>{void load();const timer=setInterval(()=>void load(),10000);return()=>clearInterval(timer);},[id,user?.id]);
-  const act=async(action:"accept"|"decline"|"out_of_stock"|"ready")=>{
+  const act=async(action:"accept"|"decline"|"out_of_stock"|"ready"|"retry")=>{
     if(!order||busy)return;setBusy(true);setError("");setNotice("");
     try{
-      if(action==="ready")await readyForRider(order.id);
+      let matching: {state:string}|null=null;
+      if(action==="ready")matching=await readyForRider(order.id);
+      else if(action==="retry")matching=await requestRiderDispatch(order.id);
       else await respondToPartOrder(order.id,action==="accept",action==="out_of_stock");
       await load();
       setNotice(action==="accept"?"Order accepted. Stock was reserved for this order.":
-        action==="ready"?"Marked ready. Verified riders can claim this delivery.":
-        action==="out_of_stock"?"Order declined; inventory quantity set to zero.":"Order declined.");
+        action==="ready"||action==="retry"
+          ? matching?.state==="offered"||matching?.state==="existing_offer"
+            ? "A verified rider is being offered this pickup."
+            : "No rider has accepted yet. You can retry matching without changing the order."
+          : action==="out_of_stock"?"Order declined; inventory quantity set to zero.":"Order declined.");
     }catch(e){setError(e instanceof Error?e.message:"Unable to update order.");}
     finally{setBusy(false);}
   };
@@ -90,7 +95,12 @@ export default function DealerOrderDetails(){
       </>:null}
       {order.status==="accepted"?<Action label="Packed · Ready for rider pickup" busy={busy}
         onPress={()=>void act("ready")}/>:null}
-      {order.status==="ready_for_pickup"?<Notice>Your item is ready. It will appear in the delivery queue for an approved rider.</Notice>:null}
+      {order.status==="ready_for_pickup"?<>
+        <Notice>Your item is ready. AutoAssist offers it to one available verified rider at a time. You can retry if no rider responds.</Notice>
+        <Action label="Retry rider matching" busy={busy}
+          icon={{ios:"arrow.clockwise",android:"refresh",web:"refresh"}}
+          onPress={()=>void act("retry")}/>
+      </>:null}
       {order.status==="rider_assigned"?<Notice>A rider has accepted this delivery. Prepare the sealed part for handoff.</Notice>:null}
       {order.status==="picked_up"?<Notice>The rider picked up the part. Waiting for motorist confirmation.</Notice>:null}
       {order.status==="delivered"?<Notice tone="success">The customer confirmed delivery.</Notice>:null}
