@@ -23,9 +23,11 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
       name: "AutoAssist jobs",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 150, 250],
-      // Use the Android channel's system notification sound.
-      // In SDK 58, specifying "default" here can be interpreted as
-      // a custom bundled sound filename and produce a missing-sound warning.
+    });
+    await Notifications.setNotificationChannelAsync("incoming-requests", {
+      name: "Incoming service requests",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 150, 250],
     });
   }
 
