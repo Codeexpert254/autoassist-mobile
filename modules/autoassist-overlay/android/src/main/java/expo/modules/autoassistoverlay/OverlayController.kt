@@ -9,6 +9,7 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -19,7 +20,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.Locale
 import kotlin.math.ceil
 
 /**
@@ -74,7 +74,7 @@ internal object OverlayController {
   private fun dp(context: Context, value: Int): Int =
     (value * context.resources.displayMetrics.density).toInt()
 
-  private fun background(color: Int, border: Int, radius: Int = 16): GradientDrawable =
+  private fun roundedBackground(color: Int, border: Int, radius: Int = 16): GradientDrawable =
     GradientDrawable().apply {
       setColor(color)
       cornerRadius = radius.toFloat()
@@ -97,6 +97,7 @@ internal object OverlayController {
   }
 
   fun maybePresent(context: Context, data: Map<String, String>) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     if (!isEnabled(context) || !Settings.canDrawOverlays(context)) return
     if (data["recipientId"] != prefs(context).getString("mechanicId", null)) return
     if (activeInForeground()) return // The existing React Native card handles foreground offers.
@@ -133,7 +134,7 @@ internal object OverlayController {
     val card = LinearLayout(context).apply {
       orientation = LinearLayout.VERTICAL
       setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
-      background = background(white, Color.rgb(174, 205, 246))
+      background = roundedBackground(white, Color.rgb(174, 205, 246))
       elevation = dp(context, 12).toFloat()
     }
 
@@ -167,7 +168,7 @@ internal object OverlayController {
       isAllCaps = false
       textSize = 12f
       setTextColor(gray)
-      background = background(Color.rgb(242, 244, 247), Color.rgb(208, 213, 221), 12)
+      background = roundedBackground(Color.rgb(242, 244, 247), Color.rgb(208, 213, 221), 12)
       setOnClickListener { dismiss() }
     }
     actions.addView(dismissButton, actionParams)
@@ -180,7 +181,7 @@ internal object OverlayController {
       isAllCaps = false
       textSize = 12f
       setTextColor(white)
-      background = background(blue, blue, 12)
+      background = roundedBackground(blue, blue, 12)
       setOnClickListener {
         dismiss()
         val url = Uri.parse("autoassist:///mechanic/job-offer?offerId=${Uri.encode(id)}")

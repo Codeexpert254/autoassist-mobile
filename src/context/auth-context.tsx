@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { disableFloatingOffers } from "@/services/floating-offers";
 import type { ProfileRow } from "@/types/database";
 
 export type AccountRole = "motorist" | "mechanic" | "partsdealer" | "towing" | "rider";
@@ -200,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const client = supabase;
     if (!client) {
+      disableFloatingOffers();
       setSession(null);
       setProfile(null);
       return;
@@ -207,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { error } = await client.auth.signOut();
     if (error) throw error;
+    disableFloatingOffers();
     setSession(null);
     setProfile(null);
   }, []);

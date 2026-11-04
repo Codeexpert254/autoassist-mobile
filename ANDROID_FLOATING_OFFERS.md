@@ -46,10 +46,10 @@ Android's **Appear on top** special access.
 6. Test **app open** (in-app card), **background** (floating popup plus push
    notification), **overlay disabled**, **locked screen**, **expired offer**,
    **wrong signed-in account**, and **logout** (no floating popup).
-7. Deploy both changed Edge Functions in this branch to the connected
-   Supabase AutoAssist project before testing external overlays:
-   `dispatch-repair-request` and `respond-mechanic-offer`.
-   The local React Native change alone is insufficient.
+7. The two changed Edge Functions have already been deployed to the connected
+   Supabase AutoAssist project (dispatch-repair-request v18 and
+   respond-mechanic-offer v17). Retain these versions when testing the APK.
+   A native Android APK rebuild is still required.
 
 ## Android limitations
 
