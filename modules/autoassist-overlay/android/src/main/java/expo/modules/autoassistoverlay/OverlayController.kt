@@ -1,6 +1,5 @@
 package expo.modules.autoassistoverlay
 
-import android.app.ActivityManager
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
@@ -20,6 +19,8 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlin.math.ceil
 
 /**
@@ -89,12 +90,14 @@ internal object OverlayController {
       if (bold) setTypeface(Typeface.DEFAULT, Typeface.BOLD)
     }
 
-  private fun activeInForeground(): Boolean {
-    val info = ActivityManager.RunningAppProcessInfo()
-    ActivityManager.getMyMemoryState(info)
-    return info.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND ||
-      info.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
-  }
+  private fun activeInForeground(): Boolean =
+    try {
+      // FCM callbacks briefly boost the process's OS importance even while
+      // the UI is backgrounded. Use actual Activity lifecycle instead.
+      ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    } catch (_: Exception) {
+      false
+    }
 
   fun maybePresent(context: Context, data: Map<String, String>) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
