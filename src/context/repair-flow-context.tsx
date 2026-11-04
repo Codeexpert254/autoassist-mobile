@@ -736,7 +736,7 @@ export function repairStatusLabel(status: RepairStatus) {
     quoted: "Quote awaiting approval",
     approved: "Quote approved",
     repairing: "Repair in progress",
-    "repair-complete": "Repair complete — payment due",
+    "repair-complete": "Visit finished — please rate your mechanic",
     paid: "Payment completed",
     completed: "Service completed",
     cancelled: "Request cancelled",
