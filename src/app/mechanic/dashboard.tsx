@@ -132,13 +132,13 @@ export default function Dashboard() {
         const result = await updateMechanicAvailability(user.id, false);
         if (result.error) throw result.error;
         setMechanicProfile(result.data);
-        setNotificationMessage("You are offline. AutoAssist will not offer new repair requests until you go available again.");
+        setNotificationMessage("You are offline. AutoAssist will not offer new requests until you go online again.");
         return;
       }
 
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== "granted") {
-        throw new Error("Location access is required to go available because AutoAssist matches motorists to nearby mechanics.");
+        throw new Error("Location access is required to go online because AutoAssist matches motorists to nearby mechanics.");
       }
 
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -152,8 +152,8 @@ export default function Dashboard() {
       const push = await ensureJobNotifications(user.id);
       setNotificationMessage(
         push.registered
-          ? "You are available. AutoAssist can notify this phone when a suitable nearby request is matched to you."
-          : `You are available for matching. ${push.message}`,
+          ? "You are online. New nearby requests will also pop up above the current screen while AutoAssist is open."
+          : `You are online for matching. New requests will appear inside AutoAssist. ${push.message}`,
       );
       await loadProviderState();
     } catch (caught) {
@@ -314,24 +314,26 @@ export default function Dashboard() {
             <View style={styles.availabilityTop}>
               <View style={[styles.statusDot, isAvailable && styles.statusDotActive]} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.availabilityTitle}>{isAvailable ? "Available for requests" : "You are offline"}</Text>
+                <Text style={styles.availabilityTitle}>{isAvailable ? "You are online" : "You are offline"}</Text>
                 <Text style={styles.availabilityText}>
                   {isAvailable
                     ? "You do not need to keep AutoAssist open. Suitable nearby requests can be sent to you when notifications are configured."
-                    : "Go available when you are ready to receive automatically matched customer requests."}
+                    : "Go online when you are ready to receive automatically matched customer requests."}
                 </Text>
               </View>
             </View>
             <Pressable
               style={[styles.availabilityButton, isAvailable && styles.offlineButton]}
-              disabled={availabilityLoading || Boolean(activeRepair)}
-              onPress={() => void setAvailability(!isAvailable)}
+              disabled={availabilityLoading}
+              onPress={() => activeRepair
+                ? router.push({ pathname: "/mechanic/job-details", params: { requestId: activeRepair.id } })
+                : void setAvailability(!isAvailable)}
             >
               {availabilityLoading ? (
                 <ActivityIndicator color={isAvailable ? "#1857A6" : "#FFFFFF"} />
               ) : (
                 <Text style={[styles.availabilityButtonText, isAvailable && styles.offlineButtonText]}>
-                  {activeRepair ? "Finish current request first" : isAvailable ? "Go offline" : "Go available"}
+                  {activeRepair ? (activeStatus === "repair-complete" ? "Open job • awaiting customer rating" : "Finish current job first") : isAvailable ? "Go Offline" : "Go Online"}
                 </Text>
               )}
             </Pressable>
@@ -393,7 +395,7 @@ export default function Dashboard() {
               <SymbolView name="bell" size={28} tintColor="#1857A6" />
               <Text style={styles.emptyTitle}>No request assigned right now</Text>
               <Text style={styles.emptyText}>
-                AutoAssist does the searching for you. Stay available and suitable customer requests will be offered automatically.
+                AutoAssist does the searching for you. Stay online and suitable customer requests will pop up automatically.
               </Text>
             </View>
           ) : null}
