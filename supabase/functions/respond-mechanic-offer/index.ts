@@ -112,8 +112,8 @@ async function dispatchNext(service: any, request: any) {
   await service.from("repair_requests").update({ status: "offered", dispatch_attempts: Number(request.dispatch_attempts ?? 0) + 1 }).eq("id", request.id);
 
   await sendPush(service, winner.candidate.user_id, {
-    title: "New AutoAssist request nearby",
-    body: `${request.symptom}: ${String(request.description).slice(0, 90)}`,
+    title: `New ${String(request.symptom).slice(0, 25)} request nearby`,
+    body: `${String(request.description).slice(0, 95)} • ${String(request.location_text).slice(0, 45)} • ${String(request.preferred_time).slice(0, 30)}`,
     data: { type: "mechanic_offer", route: "/mechanic/job-offer", offerId: offer.id, requestId: request.id },
   }).catch((error) => console.error("Push failed", error));
 
