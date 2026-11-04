@@ -153,9 +153,9 @@ export default function Settings() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    void requireSupabase().rpc("is_autoassist_admin" as never, {
+    void Promise.resolve(requireSupabase().rpc("is_autoassist_admin" as never, {
       p_user_id: user.id, p_required_role: null,
-    } as never).then(({ data }) => {
+    } as never)).then(({ data }) => {
       if (active) setAdmin(Boolean(data));
     }).catch(() => undefined);
     return () => { active = false; };
