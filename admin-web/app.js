@@ -79,6 +79,8 @@ function showAdmin() {
   loginView.hidden = true;
   adminView.hidden = false;
   roleBadge.textContent = String(state.role ?? "admin").replaceAll("_", " ");
+  const sandboxNav = document.querySelector("#sandbox-nav");
+  if (sandboxNav) sandboxNav.style.display = state.role === "super_admin" ? "" : "none";
 }
 
 function setLoading(message = "Loading…") {
@@ -156,6 +158,7 @@ async function navigate(section) {
     jobs: "Live repair jobs",
     orders: "Orders",
     payments: "Connection payments",
+    sandbox: "Sandbox payment testing",
     support: "Support & disputes",
     analytics: "Analytics",
     settings: "Admin settings",
@@ -168,6 +171,7 @@ async function navigate(section) {
     if (section === "users") return await renderUsers();
     if (section === "jobs") return await renderJobs();
     if (section === "payments") return await renderPayments();
+    if (section === "sandbox" && state.role === "super_admin") return await renderSandboxTesting();
     if (section === "analytics") return await renderAnalytics();
     if (section === "settings") return renderSettings();
     if (section === "orders") return renderNotConnected("Orders", "Parts/order persistence is not live in the current backend yet. This screen is isolated and ready to connect when the order tables are implemented.");
@@ -186,7 +190,8 @@ async function renderOverview() {
       ${metric("Total users", m.totalUsers, `${m.roleCounts?.mechanic ?? 0} mechanics`)}
       ${metric("Verified mechanics", m.verifiedMechanics, `${m.availableMechanics} currently available`)}
       ${metric("Repair requests", m.repairRequests, `${pending} active/matching`)}
-      ${metric("Paid connection fees", formatKES(m.paidConnectionFees), `${m.connectionPayments} payment records`)}
+      ${metric("Real connection fees", formatKES(m.paidConnectionFees), `${m.connectionPayments} payment records`)}
+      ${metric("Simulated payments", m.simulatedPayments ?? 0, "No actual funds collected")}
     </div>
     <div class="panel">
       <div class="panel-header"><h3 class="panel-title">Live system summary</h3><span class="status approved">${escapeHtml(state.role)}</span></div>
@@ -346,13 +351,104 @@ function renderRequestTable(items) {
 async function renderPayments() {
   const data = await invoke("admin-core", { action: "payments" });
   const items = data.items ?? [];
-  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Connection payments</h3><p class="muted">Live connection-fee records. Provider secrets remain server-side.</p></div></div>${items.length ? `<div class="table-wrap"><table><thead><tr><th>Payment</th><th>Request</th><th>Amount</th><th>Provider</th><th>Status</th><th>Receipt</th><th>Created</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(String(item.id).slice(0,8))}</td><td>${escapeHtml(String(item.request_id).slice(0,8))}</td><td>${escapeHtml(formatKES(item.amount))}</td><td>${escapeHtml(item.provider)}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(item.mpesa_receipt_number || "—")}</td><td>${escapeHtml(formatDate(item.created_at))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No connection payment records yet.</div>`}</div>`;
+  content.innerHTML = `<div class="panel"><div class="panel-header"><div><h3 class="panel-title">Connection payments</h3><p class="muted">Live connection-fee records. Provider secrets remain server-side.</p></div></div>${items.length ? `<div class="table-wrap"><table><thead><tr><th>Payment</th><th>Request</th><th>Amount</th><th>Provider</th><th>Status</th><th>Receipt</th><th>Created</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(String(item.id).slice(0,8))}</td><td>${escapeHtml(String(item.request_id).slice(0,8))}</td><td>${escapeHtml(formatKES(item.amount))}</td><td>${item.provider === "sandbox_simulator" ? "<strong>SANDBOX TEST</strong><br><span class='muted'>No actual funds</span>" : escapeHtml(item.provider)}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(item.mpesa_receipt_number || "—")}</td><td>${escapeHtml(formatDate(item.created_at))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No connection payment records yet.</div>`}</div>`;
+}
+
+async function renderSandboxTesting() {
+  if (state.role !== "super_admin") throw new Error("Super-admin access required.");
+
+  const [simulator, jobs, payments] = await Promise.all([
+    invoke("sandbox-payment-simulator", { action: "status" }),
+    invoke("admin-core", { action: "jobs" }),
+    invoke("admin-core", { action: "payments" }),
+  ]);
+  const paymentMap = new Map((payments.items ?? []).map((payment) => [payment.request_id, payment]));
+  const accepted = (jobs.items ?? [])
+    .filter((job) => job.status === "accepted" && job.mechanic_id && Number(job.connection_fee_amount) === 500);
+
+  content.innerHTML = `
+    <div class="panel">
+      <div class="panel-header">
+        <div><h3 class="panel-title">Super-admin sandbox payment simulator</h3>
+        <p class="muted">For testing only. This is outside the Android app. No M-PESA funds are collected or transferred.</p></div>
+        <span class="status ${simulator.enabled ? "approved" : "failed"}">${simulator.enabled ? "Sandbox enabled" : "Disabled"}</span>
+      </div>
+      <div class="notice ${simulator.enabled ? "success" : "warning"}">
+        <strong>${simulator.enabled ? "Test-only operation enabled" : "Simulation is disabled"}</strong><br>
+        ${escapeHtml(simulator.message)}<br>
+        A successful simulation marks the payment provider <strong>sandbox_simulator</strong> and unlocks contact details. It does not call Daraja or create a genuine receipt.
+      </div>
+      <p class="muted">To enable intentionally, set <code>MPESA_ENV=sandbox</code> and <code>AUTOASSIST_PAYMENT_SIMULATOR_ENABLED=true</code> under Supabase Edge Function Secrets. Switching to production disables simulation automatically.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3 class="panel-title">Accepted repair requests</h3><span class="muted">Only accepted KES 500 jobs can be tested</span></div>
+      ${accepted.length ? `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Repair request</th><th>Motorist / Mechanic</th><th>Payment</th><th>Test actions</th></tr></thead>
+          <tbody>
+            ${accepted.map((job) => {
+              const payment = paymentMap.get(job.id);
+              const blocked = !simulator.enabled || ["paid","refunded"].includes(payment?.status) ||
+                (payment?.status === "pending" && payment?.hasOpenCheckout);
+              const reason = payment?.status === "paid" ? "Already paid" :
+                payment?.status === "refunded" ? "Refunded" :
+                payment?.hasOpenCheckout ? "Await Daraja checkout resolution first" :
+                simulator.enabled ? "No payment has been collected" : "Simulator disabled";
+              return `<tr>
+                <td><strong>${escapeHtml(job.symptom ?? "Repair")}</strong><br>
+                <span class="muted">${escapeHtml(job.id)}<br>${escapeHtml(formatDate(job.created_at))}</span></td>
+                <td>${escapeHtml(job.motorist?.full_name ?? "Motorist")}<br>
+                <span class="muted">Mechanic: ${escapeHtml(job.mechanic?.full_name ?? "Assigned")}</span></td>
+                <td><span class="status ${statusClass(payment?.status)}">${escapeHtml(payment?.status ?? "Not started")}</span><br>
+                <span class="muted">${escapeHtml(payment?.provider ?? "—")} • ${escapeHtml(reason)}</span></td>
+                <td>
+                  <div class="action-row">
+                    <button class="button primary" data-sandbox-id="${escapeHtml(job.id)}" data-outcome="success" ${blocked ? "disabled" : ""}>Simulate success</button>
+                    <button class="button warning" data-sandbox-id="${escapeHtml(job.id)}" data-outcome="failure" ${blocked ? "disabled" : ""}>Simulate failure</button>
+                  </div>
+                </td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table></div>
+      ` : `<div class="empty">No accepted KES 500 requests are available. Create and accept a new repair request on your two phones.</div>`}
+    </div>
+  `;
+
+  content.querySelectorAll("[data-sandbox-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const requestId = button.dataset.sandboxId;
+      const outcome = button.dataset.outcome;
+      const phrase = window.prompt(
+        `TEST ONLY: Simulate ${outcome} for this accepted repair? No real money will move.\n\nType SIMULATE TEST PAYMENT to confirm:`
+      );
+      if (phrase === null) return;
+      if (phrase !== "SIMULATE TEST PAYMENT") {
+        window.alert("Simulation cancelled. The confirmation phrase did not match.");
+        return;
+      }
+      content.querySelectorAll("[data-sandbox-id]").forEach((item) => { item.disabled = true; });
+      try {
+        const result = await invoke("sandbox-payment-simulator", {
+          action: "simulate",
+          requestId,
+          outcome,
+          confirmation: phrase,
+        });
+        window.alert(result.message ?? "Sandbox payment status updated.");
+        await renderSandboxTesting();
+      } catch (error) {
+        window.alert(error.message ?? "Sandbox payment simulation failed.");
+        await renderSandboxTesting();
+      }
+    });
+  });
 }
 
 async function renderAnalytics() {
   const data = await invoke("admin-core", { action: "analytics" });
   const m = data.metrics;
-  content.innerHTML = `<div class="metric-grid">${metric("Users",m.totalUsers)}${metric("Verified mechanics",m.verifiedMechanics)}${metric("Repair requests",m.repairRequests)}${metric("Average rating",m.averageRating || "—")}</div><div class="panel"><h3 class="panel-title">Operational analytics</h3><div class="info-grid" style="margin-top:14px">${info("Paid connection fees",formatKES(m.paidConnectionFees))}${info("Payment records",m.connectionPayments)}${info("Ratings submitted",m.ratings)}${info("Mechanics available",m.availableMechanics)}</div></div>`;
+  content.innerHTML = `<div class="metric-grid">${metric("Users",m.totalUsers)}${metric("Verified mechanics",m.verifiedMechanics)}${metric("Repair requests",m.repairRequests)}${metric("Average rating",m.averageRating || "—")}</div><div class="panel"><h3 class="panel-title">Operational analytics</h3><div class="info-grid" style="margin-top:14px">${info("Real connection fees",formatKES(m.paidConnectionFees))}${info("Simulated payments",m.simulatedPayments ?? 0)}${info("Payment records",m.connectionPayments)}${info("Ratings submitted",m.ratings)}${info("Mechanics available",m.availableMechanics)}</div></div>`;
 }
 
 function renderSettings() {
