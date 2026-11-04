@@ -11,6 +11,7 @@ import {
   getConnectionPayment,
   getDispatchRequest,
   getMechanicActiveRepairs,
+  finishConnectionService,
 } from "@/services/dispatch-backend";
 import { updateRepairStatus } from "@/services/repair-backend";
 
@@ -88,13 +89,45 @@ export default function JobDetails() {
       if (result.error) throw result.error;
       await refreshBackend();
       await load();
-      if (status === "arrived") {
-        router.push("/mechanic/inspection");
-      }
+      // Arrival starts the offline service. No in-app inspection or quote flow.
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to update this repair status.");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const finishService = async () => {
+    if (!requestId || updating) return;
+    setUpdating(true);
+    setError("");
+    try {
+      await finishConnectionService(requestId);
+      await refreshBackend();
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to finish the service.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const openNavigation = async () => {
+    if (!request) return;
+    const hasCoordinates = request.latitude != null && request.longitude != null;
+    const destination = hasCoordinates
+      ? `${request.latitude},${request.longitude}`
+      : String(contact?.serviceLocation || request.location_text || "");
+    if (!destination) {
+      setError("Customer location is unavailable. Contact the motorist for directions.");
+      return;
+    }
+    try {
+      await Linking.openURL(
+        `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`,
+      );
+    } catch {
+      setError("Unable to open navigation. Check that a maps application is available.");
     }
   };
 
@@ -176,8 +209,8 @@ export default function JobDetails() {
                   <Text style={styles.contactTitle}>Connection confirmed</Text>
                   <Text style={styles.contactSubtitle}>
                     {payment?.provider === "sandbox_simulator"
-                      ? "Test connection unlocked to verify the repair journey."
-                      : "You can now coordinate directly with the motorist."}
+                      ? "Test connection unlocked to verify the service journey."
+                      : "You can now contact the motorist and travel to their location."}
                   </Text>
                 </View>
               </View>
@@ -186,8 +219,19 @@ export default function JobDetails() {
               <Detail label="Service location" value={contact?.serviceLocation || request.location_text} />
 
               {contact?.phone ? (
-                <Pressable style={styles.callButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
-                  <Text style={styles.callText}>Call customer</Text>
+                <>
+                  <Pressable style={styles.callButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
+                    <Text style={styles.callText}>Call customer</Text>
+                  </Pressable>
+                  <Pressable style={styles.callButton} onPress={() => void Linking.openURL(`sms:${contact.phone}`)}>
+                    <Text style={styles.callText}>Message customer (SMS)</Text>
+                  </Pressable>
+                </>
+              ) : null}
+
+              {status !== "completed" && status !== "repair-complete" ? (
+                <Pressable style={styles.callButton} onPress={() => void openNavigation()}>
+                  <Text style={styles.callText}>Open directions to customer</Text>
                 </Pressable>
               ) : null}
 
@@ -200,9 +244,26 @@ export default function JobDetails() {
                   {updating ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>I have arrived</Text>}
                 </Pressable>
               ) : status === "arrived" ? (
-                <Pressable style={styles.primaryButton} onPress={() => router.push("/mechanic/inspection")}>
-                  <Text style={styles.primaryText}>Start inspection</Text>
-                </Pressable>
+                <View style={styles.servicePhase}>
+                  <Text style={styles.serviceTitle}>You're with the customer</Text>
+                  <Text style={styles.serviceHint}>Your work with the motorist takes place directly, outside AutoAssist. When your visit is finished, mark it complete so the motorist can rate you.</Text>
+                  <Pressable style={styles.primaryButton} disabled={updating} onPress={() => void finishService()}>
+                    {updating ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Mark service finished</Text>}
+                  </Pressable>
+                </View>
+              ) : status === "repair-complete" ? (
+                <View style={styles.servicePhase}>
+                  <Text style={styles.serviceTitle}>Service finished — awaiting rating</Text>
+                  <Text style={styles.serviceHint}>You've marked the visit finished. The motorist has been prompted to rate your service; the job closes when they submit their rating.</Text>
+                </View>
+              ) : status === "completed" ? (
+                <View style={styles.servicePhase}>
+                  <Text style={styles.serviceTitle}>Job completed</Text>
+                  <Text style={styles.serviceHint}>The motorist submitted their rating, and this job is now closed.</Text>
+                  <Pressable style={styles.primaryButton} onPress={() => router.replace("/mechanic/dashboard")}>
+                    <Text style={styles.primaryText}>Return to dashboard</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           )}
@@ -252,6 +313,9 @@ const styles = StyleSheet.create({
   lockTitle: { color: "#8A5200", fontSize: 14, textAlign: "center", fontFamily: "Inter_600SemiBold", marginTop: 9 },
   lockText: { color: "#667085", fontSize: 10, lineHeight: 16, textAlign: "center", fontFamily: "Inter_400Regular", marginTop: 6 },
   contactCard: { borderWidth: 1, borderColor: "#B7E4CB", backgroundColor: "#F4FBF7", borderRadius: 15, padding: 16, marginTop: 15 },
+  servicePhase: { marginTop: 14, borderTopWidth: 1, borderTopColor: "#B7E4CB", paddingTop: 14 },
+  serviceTitle: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  serviceHint: { color: "#475467", fontSize: 11, lineHeight: 17, fontFamily: "Inter_400Regular", marginTop: 6 },
   successHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 7 },
   contactTitle: { color: "#176B45", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   contactSubtitle: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 2 },
