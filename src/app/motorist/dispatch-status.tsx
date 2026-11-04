@@ -138,6 +138,20 @@ export default function DispatchStatus() {
     };
   }, [requestId, backendEnabled, user?.id]);
 
+  const retryMatching = async () => {
+    if (!requestId || retrying || dispatchingRef.current) return;
+    setRetrying(true);
+    setError("");
+    setDispatchMessage("Searching again using your existing request…");
+    try {
+      await refresh(requestId, true, true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to retry matching. Your request remains saved.");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const cancel = async () => {
     if (!requestId || cancelling) return;
     setCancelling(true);
