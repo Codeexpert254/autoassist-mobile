@@ -4,6 +4,9 @@ AutoAssist uses [MapLibre React Native](https://maplibre.org/maplibre-react-nati
 with the public [OpenFreeMap Liberty style](https://openfreemap.org/quick_start/).
 **No Google Maps key, Google Cloud billing account, or registration is required.**
 
+Remove any previous `GOOGLE_MAPS_API_KEY` entry from your private `.env.local` if you wish;
+MapLibre and OpenFreeMap do not read it. Keep unrelated local keys untouched.
+
 ## Android development build
 
 The renderer is a native module. It needs a fresh development APK after
