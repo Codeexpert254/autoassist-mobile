@@ -10,6 +10,14 @@ const googleMapsApiKey = (process.env.GOOGLE_MAPS_API_KEY ?? "").trim();
 module.exports = ({ config }) => ({
   ...config,
   ...base,
+  // CI uses a sanitized app.json without its local Android package ID.
+  // Match the already-installed AutoAssist Android app, while preserving
+  // the developer's package if set in their local app.json.
+  android: {
+    ...(config.android ?? {}),
+    ...(base.android ?? {}),
+    package: base.android?.package || config.android?.package || "com.company.autoassist",
+  },
   extra: {
     ...(config.extra ?? {}),
     ...(base.extra ?? {}),
