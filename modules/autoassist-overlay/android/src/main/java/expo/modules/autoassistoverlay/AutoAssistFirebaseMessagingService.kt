@@ -30,6 +30,7 @@ class AutoAssistFirebaseMessagingService : ExpoFirebaseMessagingService() {
       }
     }
     if (overlay["type"] == "mechanic_offer_overlay") {
+      OverlayController.noteFcmDelivery(applicationContext)
       OverlayController.maybePresent(applicationContext, overlay)
     }
   }

@@ -21,6 +21,7 @@ import {
   dismissFloatingOffer,
   enableFloatingOffersForMechanic,
   getFloatingOfferStatus,
+  getFloatingOfferDiagnostics,
   openFloatingOfferPermissionSettings,
 } from "@/services/floating-offers";
 
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [checkingNotifications, setCheckingNotifications] = useState(false);
   const [floatingStatus, setFloatingStatus] = useState(getFloatingOfferStatus);
   const [floatingNotice, setFloatingNotice] = useState("");
+  const [floatingDebug, setFloatingDebug] = useState("");
   const [floatingBusy, setFloatingBusy] = useState(false);
 
   const refreshFloatingStatus = () => setFloatingStatus(getFloatingOfferStatus());
@@ -431,6 +433,18 @@ export default function Dashboard() {
                 </Text>
               </Pressable>
               {floatingNotice ? <Text style={styles.cardText}>{floatingNotice}</Text> : null}
+              <Pressable style={styles.refreshButton} onPress={() => {
+                const d = getFloatingOfferDiagnostics();
+                const time = Number(d.lastFcmAt);
+                setFloatingDebug(
+                  `Permission: ${d.permission} • Enabled: ${d.enabled}\n` +
+                  `Last native data alert: ${time > 0 ? new Date(time).toLocaleString() : "none received"}\n` +
+                  `Last result: ${d.lastDecision}`
+                );
+              }}>
+                <Text style={styles.refreshText}>Check background popup diagnostics</Text>
+              </Pressable>
+              {floatingDebug ? <Text style={styles.cardText}>{floatingDebug}</Text> : null}
             </View>
           ) : null}
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}

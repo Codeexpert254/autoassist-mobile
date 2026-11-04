@@ -16,6 +16,9 @@ class AutoAssistOverlayModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AutoAssistOverlay")
 
+    Function("getDiagnostics") {
+      OverlayController.diagnostics(context())
+    }
     Function("hasPermission") {
       Settings.canDrawOverlays(context())
     }

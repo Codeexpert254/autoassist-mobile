@@ -37,6 +37,28 @@ internal object OverlayController {
   private var tick: Runnable? = null
   private var visibleOfferId: String? = null
 
+  fun noteFcmDelivery(context: Context) {
+    prefs(context).edit()
+      .putLong("lastFcmAt", System.currentTimeMillis())
+      .putString("lastDecision", "received")
+      .apply()
+  }
+
+  private fun noteDecision(context: Context, reason: String) {
+    prefs(context).edit().putString("lastDecision", reason).apply()
+    Log.d("AutoAssistOverlay", reason)
+  }
+
+  fun diagnostics(context: Context): Map<String, String> {
+    val p = prefs(context)
+    return mapOf(
+      "lastFcmAt" to p.getLong("lastFcmAt", 0L).toString(),
+      "lastDecision" to (p.getString("lastDecision", "no background data received") ?: "unknown"),
+      "enabled" to isEnabled(context).toString(),
+      "permission" to Settings.canDrawOverlays(context).toString()
+    )
+  }
+
   private fun prefs(context: Context) =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -100,18 +122,46 @@ internal object OverlayController {
     }
 
   fun maybePresent(context: Context, data: Map<String, String>) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-    if (!isEnabled(context) || !Settings.canDrawOverlays(context)) return
-    if (data["recipientId"] != prefs(context).getString("mechanicId", null)) return
-    if (activeInForeground()) return // The existing React Native card handles foreground offers.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+      noteDecision(context, "unsupported_android_version")
+      return
+    }
+    if (!isEnabled(context)) {
+      noteDecision(context, "opt_in_disabled")
+      return
+    }
+    if (!Settings.canDrawOverlays(context)) {
+      noteDecision(context, "overlay_permission_missing")
+      return
+    }
+    if (data["recipientId"] != prefs(context).getString("mechanicId", null)) {
+      noteDecision(context, "account_mismatch")
+      return
+    }
+    if (activeInForeground()) {
+      noteDecision(context, "app_in_foreground")
+      return
+    }
 
     val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-    if (keyguard?.isKeyguardLocked == true) return // Lock screen retains the system notification.
+    if (keyguard?.isKeyguardLocked == true) {
+      noteDecision(context, "phone_locked")
+      return
+    }
 
-    val id = data["offerId"]?.takeIf { it.isNotBlank() } ?: return
-    val expires = data["expiresAtMs"]?.toLongOrNull() ?: return
+    val id = data["offerId"]?.takeIf { it.isNotBlank() } ?: run {
+      noteDecision(context, "missing_offer_id")
+      return
+    }
+    val expires = data["expiresAtMs"]?.toLongOrNull() ?: run {
+      noteDecision(context, "missing_expiry")
+      return
+    }
     val remaining = expires - System.currentTimeMillis()
-    if (remaining <= 0L || remaining > MAX_LIFETIME_MS + 15_000L) return
+    if (remaining <= 0L || remaining > MAX_LIFETIME_MS + 15_000L) {
+      noteDecision(context, "offer_expired_or_invalid")
+      return
+    }
 
     main.post {
       if (!isEnabled(context) || !Settings.canDrawOverlays(context)) return@post
@@ -119,8 +169,10 @@ internal object OverlayController {
       if (visibleOfferId == id) return@post
       try {
         showOnMainThread(context.applicationContext, data, id, expires)
+        noteDecision(context, "overlay_displayed")
       } catch (error: Exception) {
         removeOnMainThread()
+        noteDecision(context, "window_manager_error")
         Log.w("AutoAssistOverlay", "Overlay unavailable; regular FCM notification remains", error)
       }
     }

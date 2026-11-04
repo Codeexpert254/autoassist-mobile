@@ -51,6 +51,24 @@ Android's **Appear on top** special access.
    respond-mechanic-offer v17). Retain these versions when testing the APK.
    A native Android APK rebuild is still required.
 
+## Background popup diagnostics
+
+The **Mechanic dashboard → Check background popup diagnostics** button shows
+four non-sensitive fields: overlay permission, opt-in, time of last native
+FCM data-only offer, and last processing result.
+
+- `native_module_not_in_build`: reinstall a development APK with this module.
+- `no background data received`: check Android merged manifest contains only
+  the AutoAssist FCM service and use adb logcat to verify incoming data pushes.
+- `overlay_permission_missing` / `opt_in_disabled`: enable special access and
+  the app's Floating job popups toggle.
+- `account_mismatch`: wrong user is signed in; log out and register current
+  mechanic's token on this device.
+- `app_in_foreground`: expected; the React Native mechanic dashboard handles it.
+- `window_manager_error`: use adb logcat for Android device-specific failure.
+- `overlay_displayed`: native window was added to WindowManager; if invisible,
+  check manufacturer overlay and battery/background permissions.
+
 ## Android limitations
 
 `SYSTEM_ALERT_WINDOW` is a sensitive, opt-in Android special access.

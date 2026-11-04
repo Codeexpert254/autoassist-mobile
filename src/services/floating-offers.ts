@@ -2,6 +2,7 @@ import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
 
 type OverlayNative = {
+  getDiagnostics(): Record<string, string>;
   hasPermission(): boolean;
   isEnabled(): boolean;
   enableForUser(userId: string): void;
@@ -44,4 +45,14 @@ export function disableFloatingOffers(): void {
 
 export function dismissFloatingOffer(): void {
   native?.dismiss();
+}
+
+/** No personal data or notification contents are returned. */
+export function getFloatingOfferDiagnostics(): Record<string, string> {
+  return native?.getDiagnostics() ?? {
+    lastFcmAt: "0",
+    lastDecision: "native_module_not_in_build",
+    enabled: "false",
+    permission: "false",
+  };
 }
