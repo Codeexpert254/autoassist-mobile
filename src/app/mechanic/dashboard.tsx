@@ -1,8 +1,8 @@
 import * as Location from "expo-location";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -20,7 +20,6 @@ import { SettingsButton } from "@/components/settings-button";
 import {
   disableFloatingOffers,
   dismissFloatingOffer,
-  getFloatingOfferStatus,
   setFloatingOffersOnline,
 } from "@/services/floating-offers";
 
@@ -36,24 +35,6 @@ export default function Dashboard() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
-  const [floatingStatus, setFloatingStatus] = useState(getFloatingOfferStatus);
-
-  // A navigation back from Settings does not change AppState. Refresh the
-  // banner whenever the dashboard regains focus as well.
-  useFocusEffect(useCallback(() => {
-    if (Platform.OS === "android") setFloatingStatus(getFloatingOfferStatus());
-  }, []));
-
-  useEffect(() => {
-    if (Platform.OS !== "android") return;
-    const update = () => setFloatingStatus(getFloatingOfferStatus());
-    update();
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") update();
-    });
-    return () => sub.remove();
-  }, []);
-
   const loadProviderState = async () => {
     if (!backendEnabled) {
       setLoading(false);
@@ -251,8 +232,7 @@ export default function Dashboard() {
                 <Text style={styles.title}>Welcome, {firstName}</Text>
               </View>
               <SettingsButton />
-              <SettingsButton />
-            <Pressable onPress={() => void logout()} style={styles.logoutButton}>
+              <Pressable onPress={() => void logout()} style={styles.logoutButton}>
                 <Text style={styles.logoutText}>Logout</Text>
               </Pressable>
             </View>
@@ -335,6 +315,7 @@ export default function Dashboard() {
               <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
               <Text style={styles.title}>Welcome, {firstName}</Text>
             </View>
+            <SettingsButton />
             <Pressable onPress={() => void logout()} style={styles.logoutButton}>
               <Text style={styles.logoutText}>Logout</Text>
             </Pressable>
@@ -370,23 +351,6 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
-          {Platform.OS === "android" && floatingStatus.supported && !floatingStatus.hasPermission ? (
-            <View style={styles.alertSetupCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Get job alerts over other apps</Text>
-                <Text style={styles.cardText}>
-                  Set up floating job alerts so you can see new requests while using your phone. Android asks you to approve "Appear on top" once.
-                </Text>
-              </View>
-              <Pressable
-                style={styles.setupButton}
-                accessibilityRole="button"
-                onPress={() => router.push("/settings")}
-              >
-                <Text style={styles.setupButtonText}>Set up</Text>
-              </Pressable>
-            </View>
-          ) : null}
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
           {error ? <Text style={styles.errorTextStandalone}>{error}</Text> : null}
 
@@ -502,9 +466,6 @@ const styles = StyleSheet.create({
   offlineButton: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#1857A6" },
   offlineButtonText: { color: "#1857A6" },
   successNotice: { color: "#176B45", backgroundColor: "#EFFAF4", borderRadius: 10, padding: 10, fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 12 },
-  alertSetupCard: { backgroundColor: "#F0F7FF", borderColor: "#B8D2F0", borderWidth: 1, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 12, padding: 14, marginTop: 14 },
-  setupButton: { backgroundColor: "#1857A6", borderRadius: 9, minHeight: 40, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
-  setupButtonText: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   metricsRow: { flexDirection: "row", gap: 8, marginTop: 16 },
   metricCard: { flex: 1, borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 12, paddingVertical: 13, alignItems: "center", backgroundColor: "#FFFFFF" },
   metricValue: { color: "#102A43", fontSize: 16, fontFamily: "Inter_600SemiBold" },

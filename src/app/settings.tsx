@@ -178,6 +178,21 @@ export default function Settings() {
                   <Text style={styles.secondaryText}>Review Android overlay permission</Text>
                 </Pressable>
               ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Check background popup diagnostics"
+                style={styles.secondaryButton}
+                onPress={() => {
+                  const d = getFloatingOfferDiagnostics();
+                  const last = Number(d.lastFcmAt);
+                  setDebug("Permission: " + d.permission + " • Enabled: " + d.enabled + " • Online: " + d.online +
+                    "\nLast alert: " + (last > 0 ? new Date(last).toLocaleString() : "none") +
+                    "\nLast result: " + d.lastDecision);
+                }}
+              >
+                <Text style={styles.secondaryText}>Check background popup diagnostics</Text>
+              </Pressable>
+              {debug ? <Text style={styles.helper}>{debug}</Text> : null}
             </View>
           ) : null}
 
@@ -201,21 +216,6 @@ export default function Settings() {
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
 
-          {__DEV__ && isMechanic && Platform.OS === "android" ? (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Developer diagnostics</Text>
-              <Pressable style={styles.secondaryButton} onPress={() => {
-                const d = getFloatingOfferDiagnostics();
-                const last = Number(d.lastFcmAt);
-                setDebug("Permission: " + d.permission + " • Enabled: " + d.enabled + " • Online: " + d.online +
-                  "\nLast alert: " + (last > 0 ? new Date(last).toLocaleString() : "none") +
-                  "\nLast result: " + d.lastDecision);
-              }}>
-                <Text style={styles.secondaryText}>Check background alert diagnostics</Text>
-              </Pressable>
-              {debug ? <Text style={styles.helper}>{debug}</Text> : null}
-            </View>
-          ) : null}
         </ScrollView>
       </SafeAreaView>
     </View>
