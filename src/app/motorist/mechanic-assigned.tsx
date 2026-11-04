@@ -1,16 +1,19 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useAuth } from "@/context/auth-context";
 import { useRepairFlow } from "@/context/repair-flow-context";
-import { getConnectionContact, getConnectionPayment, getDispatchRequest } from "@/services/dispatch-backend";
+import { getConnectionContact, getConnectionPayment, getDispatchRequest, getServiceRating } from "@/services/dispatch-backend";
+import { submitRating } from "@/services/repair-backend";
 
 export default function MechanicAssigned() {
   const router = useRouter();
   const params = useLocalSearchParams<{ requestId?: string }>();
-  const { state } = useRepairFlow();
+  const { user, profile } = useAuth();
+  const { state, refreshBackend } = useRepairFlow();
   const parameterRequestId = Array.isArray(params.requestId) ? params.requestId[0] : params.requestId;
   const requestId = parameterRequestId ?? state.requestId ?? undefined;
 
@@ -19,6 +22,11 @@ export default function MechanicAssigned() {
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [stars, setStars] = useState(0);
+  const [review, setReview] = useState("");
+  const [savedRating, setSavedRating] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState("");
 
   const load = async () => {
     if (!requestId || requestId.startsWith("REP-")) {
@@ -38,6 +46,14 @@ export default function MechanicAssigned() {
       setRequest(requestResult.data);
       setPayment(paymentResult.data);
 
+      if (requestResult.data?.status === "completed") {
+        const existingRating = await getServiceRating(requestId);
+        if (existingRating.error) throw existingRating.error;
+        setSavedRating(existingRating.data);
+      } else {
+        setSavedRating(null);
+      }
+
       const result = await getConnectionContact(requestId);
       setContact(result?.contact ?? null);
     } catch (caught) {
@@ -55,6 +71,40 @@ export default function MechanicAssigned() {
     return () => clearInterval(timer);
   }, [requestId]);
 
+  const rateMechanic = async () => {
+    if (submitting || !requestId || !user || profile?.role !== "motorist") return;
+    if (request?.status !== "repair-complete") {
+      setRatingError("The mechanic must mark the visit finished before you can rate it.");
+      return;
+    }
+    if (!request.mechanic_id || stars < 1 || stars > 5) {
+      setRatingError("Choose a rating from 1 to 5 stars.");
+      return;
+    }
+
+    setSubmitting(true);
+    setRatingError("");
+    try {
+      const result = await submitRating({
+        requestId,
+        motoristId: user.id,
+        mechanicId: request.mechanic_id,
+        rating: stars,
+        review: review.trim().slice(0, 1000),
+      });
+      if (result.error) throw result.error;
+      // The database atomically changes repair-complete -> completed when
+      // the authenticated motorist submits the rating.
+      await load();
+      await refreshBackend();
+    } catch (caught) {
+      setRatingError(caught instanceof Error ? caught.message : "Unable to submit your rating.");
+      await load();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.screen}>
@@ -67,7 +117,12 @@ export default function MechanicAssigned() {
   }
 
   const locked = !contact;
-  const statusLabel = String(request?.status ?? "connected").replace(/-/g, " ");
+  const statusLabel =
+    request?.status === "repair-complete" ? "Awaiting your rating" :
+    request?.status === "en-route" ? "Mechanic on the way" :
+    request?.status === "arrived" ? "Mechanic has arrived" :
+    request?.status === "completed" ? "Completed" :
+    String(request?.status ?? "connected").replace(/-/g, " ");
 
   return (
     <View style={styles.screen}>
@@ -109,7 +164,7 @@ export default function MechanicAssigned() {
                 <Text style={styles.successText}>
                   {payment?.provider === "sandbox_simulator"
                     ? "TEST CONNECTION — A KES 500 payment was simulated. No actual M-PESA money was collected."
-                    : "The KES 500 AutoAssist connection fee is confirmed. You and the mechanic can now coordinate this repair."}
+                    : "The KES 500 AutoAssist connection fee is confirmed. You can now coordinate directly with the mechanic."}
                 </Text>
               </View>
 
@@ -136,20 +191,82 @@ export default function MechanicAssigned() {
                 <Detail label="Request status" value={statusLabel} />
 
                 {contact.phone ? (
-                  <Pressable style={styles.primaryButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
-                    <Text style={styles.primaryText}>Call mechanic</Text>
-                  </Pressable>
+                  <>
+                    <Pressable style={styles.primaryButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
+                      <Text style={styles.primaryText}>Call mechanic</Text>
+                    </Pressable>
+                    <Pressable style={styles.outlineButton} onPress={() => void Linking.openURL(`sms:${contact.phone}`)}>
+                      <Text style={styles.outlineText}>Message mechanic (SMS)</Text>
+                    </Pressable>
+                  </>
                 ) : null}
               </View>
 
               <View style={styles.noteCard}>
-                <Text style={styles.noteTitle}>Repair pricing is separate</Text>
+                <Text style={styles.noteTitle}>AutoAssist connects you with a provider</Text>
                 <Text style={styles.noteText}>
-                  {payment?.provider === "sandbox_simulator"
-                    ? "This is an end-to-end service-flow test. No KES 500 fee was charged. In a live service, the actual connection fee is separate from repair labour and parts."
-                    : "The KES 500 fee pays AutoAssist for making the verified connection. The mechanic will inspect the vehicle and send the repair labour/parts quote separately."}
+                  The KES 500 fee covers the AutoAssist connection only. Any service work or separate arrangements with the provider happen directly between you and the provider, outside this app.
                 </Text>
               </View>
+
+              {request?.status === "arrived" ? (
+                <View style={styles.progressCard}>
+                  <Text style={styles.progressTitle}>Your mechanic has arrived</Text>
+                  <Text style={styles.progressText}>The service can now take place. Once the mechanic marks the visit finished, you'll be asked to rate your experience.</Text>
+                </View>
+              ) : request?.status === "en-route" ? (
+                <View style={styles.progressCard}>
+                  <Text style={styles.progressTitle}>Mechanic is on the way</Text>
+                  <Text style={styles.progressText}>You can call or message your mechanic using the contact details above.</Text>
+                </View>
+              ) : null}
+
+              {request?.status === "repair-complete" ? (
+                <View style={styles.rateCard}>
+                  <Text style={styles.rateTitle}>Rate your mechanic</Text>
+                  <Text style={styles.rateHint}>Your mechanic has finished the visit. Choose a star rating to finish and close this AutoAssist job.</Text>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((value) => (
+                      <Pressable
+                        key={value}
+                        style={styles.starTap}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Rate ${value} out of 5 stars`}
+                        onPress={() => setStars(value)}
+                        disabled={submitting}
+                      >
+                        <Text style={[styles.starText, value <= stars && styles.starSelected]}>★</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={styles.rateHint}>{stars ? `${stars} of 5 stars selected` : "Tap a star to choose your rating"}</Text>
+                  <TextInput
+                    value={review}
+                    onChangeText={setReview}
+                    style={styles.reviewInput}
+                    placeholder="Add a short review (optional)"
+                    placeholderTextColor="#98A2B3"
+                    multiline
+                    numberOfLines={3}
+                    maxLength={1000}
+                    editable={!submitting}
+                    textAlignVertical="top"
+                  />
+                  {ratingError ? <Text style={styles.ratingError}>{ratingError}</Text> : null}
+                  <Pressable style={[styles.primaryButton, (submitting || stars === 0) && styles.disabledButton]} disabled={submitting || stars === 0} onPress={() => void rateMechanic()}>
+                    {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Submit rating & complete job</Text>}
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {request?.status === "completed" ? (
+                <View style={styles.completedCard}>
+                  <Text style={styles.completedTitle}>Job completed</Text>
+                  <Text style={styles.progressText}>Thank you for rating your mechanic. This AutoAssist connection is now closed.</Text>
+                  {savedRating?.rating ? <Text style={styles.savedStars}>{'★'.repeat(savedRating.rating)}{'☆'.repeat(5 - savedRating.rating)}</Text> : null}
+                  {savedRating?.review ? <Text style={styles.progressText}>{savedRating.review}</Text> : null}
+                </View>
+              ) : null>
             </>
           )}
 
@@ -207,6 +324,24 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 47, borderRadius: 11, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 16, alignSelf: "stretch" },
   primaryText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   noteCard: { backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F5D48A", borderRadius: 13, padding: 14, marginTop: 14 },
+  progressCard: { borderRadius: 14, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#F5F9FE", padding: 16, marginTop: 14 },
+  progressTitle: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  progressText: { color: "#475467", fontSize: 11, lineHeight: 17, marginTop: 6, fontFamily: "Inter_400Regular" },
+  rateCard: { borderRadius: 14, borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#F5F9FE", padding: 16, marginTop: 14 },
+  rateTitle: { color: "#102A43", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  rateHint: { color: "#475467", fontSize: 11, lineHeight: 17, marginTop: 7, fontFamily: "Inter_400Regular" },
+  starsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
+  starTap: { padding: 6, minWidth: 42, alignItems: "center" },
+  starText: { color: "#CAD3DF", fontSize: 35 },
+  starSelected: { color: "#F4A100" },
+  reviewInput: { borderWidth: 1, borderColor: "#D0D5DD", minHeight: 78, borderRadius: 10, backgroundColor: "#FFFFFF", padding: 12, marginTop: 12, fontSize: 12, color: "#344054", fontFamily: "Inter_400Regular" },
+  ratingError: { marginTop: 10, color: "#B42318", fontSize: 11, fontFamily: "Inter_400Regular" },
+  disabledButton: { opacity: 0.55 },
+  completedCard: { borderRadius: 14, backgroundColor: "#F4FBF7", borderWidth: 1, borderColor: "#B7E4CB", padding: 16, marginTop: 14 },
+  completedTitle: { color: "#176B45", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  savedStars: { color: "#F4A100", fontSize: 22, marginTop: 8 },
+  outlineButton: { minHeight: 44, borderWidth: 1, borderColor: "#1857A6", borderRadius: 11, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  outlineText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   noteTitle: { color: "#8A5200", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   noteText: { color: "#667085", fontSize: 10, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 4 },
   refreshButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 14 },
