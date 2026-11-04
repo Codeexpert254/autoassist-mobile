@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
 import { Action, Notice, PartsPage, Section, partStyles, NAVY } from "@/components/parts-ui";
 import { type DeliveryLead, availableDeliveries } from "@/services/parts-riders";
-import { claimPartDelivery } from "@/services/parts-orders";
+import { respondToRiderOffer } from "@/services/parts-orders";
 
 export default function RiderDeliveryOffer(){
   const p=useLocalSearchParams<{orderId?:string}>(),router=useRouter(),{profile}=useAuth();
@@ -17,8 +17,10 @@ export default function RiderDeliveryOffer(){
       .catch(e=>setError(e.message)).finally(()=>setLoading(false));
   },[id]);
   const accept=async()=>{
-    if(!id||busy)return;setBusy(true);setError("");
-    try{await claimPartDelivery(id);
+    if(!id||!offer?.offer_id||busy)return;setBusy(true);setError("");
+    try{
+      const result=await respondToRiderOffer(offer.offer_id,id,true);
+      if(result!=="accepted")throw new Error("This delivery offer is no longer available.");
       router.replace({pathname:"/rider/active-delivery",params:{orderId:id}});
     }catch(e){setError(e instanceof Error?e.message:"Delivery no longer available.");}
     finally{setBusy(false);}

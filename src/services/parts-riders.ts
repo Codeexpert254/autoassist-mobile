@@ -4,8 +4,8 @@ export type RiderProfile={
   user_id:string;vehicle_type:"motorbike"|"bicycle"|"car";registration_number:string;phone:string;
   verified:boolean;is_available:boolean;rating:number;reviews_count:number;completed_deliveries:number;
 };
-export type DeliveryLead={order_id:string;part_title:string;shop_name:string;
-  pickup_location:string;listed_at:string};
+export type DeliveryLead={offer_id:string;order_id:string;part_title:string;shop_name:string;
+  pickup_location:string;listed_at:string;expires_at:string;score:number};
 export async function myRiderProfile(id:string):Promise<RiderProfile|null>{
   const {data,error}=await t("parts_rider_profiles").select("*").eq("user_id",id).maybeSingle();
   if(error)throw error;return data;
