@@ -266,7 +266,7 @@ export default function MechanicAssigned() {
                   {savedRating?.rating ? <Text style={styles.savedStars}>{'★'.repeat(savedRating.rating)}{'☆'.repeat(5 - savedRating.rating)}</Text> : null}
                   {savedRating?.review ? <Text style={styles.progressText}>{savedRating.review}</Text> : null}
                 </View>
-              ) : null>
+              ) : null}
             </>
           )}
 
