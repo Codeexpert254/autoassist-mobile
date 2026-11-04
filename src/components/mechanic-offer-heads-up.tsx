@@ -1,7 +1,6 @@
 import { usePathname, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import * as Notifications from "expo-notifications";
-import { AppState, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -24,9 +23,12 @@ export function MechanicOfferHeadsUp() {
   const [offer, setOffer] = useState<any>(null);
   const [dismissedOfferId, setDismissedOfferId] = useState<string | null>(null);
   const [clock, setClock] = useState(Date.now());
-  const lastAudibleOffer = useRef<string | null>(null);
+  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  // Only the mechanic dashboard owns this UI. Other routes must never
+  // receive a floating React Native offer card (including motorist routes).
+  const onMechanicDashboard = pathname === "/mechanic/dashboard";
 
-  const mechanicId = backendEnabled && profile?.role === "mechanic" ? user?.id : undefined;
+  const mechanicId = backendEnabled && profile?.role === "mechanic" && onMechanicDashboard ? user?.id : undefined;
 
   const refresh = useCallback(async () => {
     if (!mechanicId) {
@@ -56,6 +58,7 @@ export function MechanicOfferHeadsUp() {
       void refresh();
     }, 5000);
     const appState = AppState.addEventListener("change", (nextState) => {
+      setForeground(nextState === "active");
       if (nextState === "active") void refresh();
     });
 
@@ -66,48 +69,9 @@ export function MechanicOfferHeadsUp() {
     };
   }, [mechanicId, refresh]);
 
-  useEffect(() => {
-    if (!mechanicId || !offer?.id || offer.status !== "offered") return;
-    if (new Date(offer.expires_at).getTime() <= Date.now()) return;
-    if (lastAudibleOffer.current === offer.id || AppState.currentState !== "active") return;
-    lastAudibleOffer.current = offer.id;
-
-    // The in-app visual card is not itself a native notification.
-    // Schedule one immediate local notification so Android can play the
-    // system channel sound even when remote push isn't configured yet.
-    void (async () => {
-      try {
-        const permission = await Notifications.getPermissionsAsync();
-        if (!permission.granted) return;
-        if (Platform.OS === "android") {
-          await Notifications.setNotificationChannelAsync("incoming-requests-v2", {
-            name: "Incoming service requests",
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 150, 250],
-          });
-        }
-        const detail = Array.isArray(offer.repair_requests)
-          ? offer.repair_requests[0] : offer.repair_requests;
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `New ${String(detail?.symptom || "service")} request`,
-            body: `${String(detail?.description || "Customer requests assistance").slice(0, 75)} • ${String(detail?.location_text || "").slice(0, 35)}`,
-            sound: "default",
-            data: {
-              type: "mechanic_offer",
-              route: "/mechanic/job-offer",
-              offerId: offer.id,
-              requestId: offer.request_id,
-            },
-            ...(Platform.OS === "android" ? { channelId: "incoming-requests-v2" } : {}),
-          },
-          trigger: null,
-        });
-      } catch (error) {
-        console.warn("Incoming request sound could not be presented", error);
-      }
-    })();
-  }, [mechanicId, offer?.id, offer?.status]);
+  // The server already sends a job notification to the intended mechanic.
+  // Do not create a second local notification from foreground polling.
+  // That caused duplicate alerts and unnecessary navigation noise.
 
   const request = Array.isArray(offer?.repair_requests)
     ? offer.repair_requests[0]
@@ -116,7 +80,7 @@ export function MechanicOfferHeadsUp() {
     offer?.id && offer.status === "offered" && new Date(offer.expires_at).getTime() > clock,
   );
   const routeIsOffer = pathname?.startsWith("/mechanic/job-offer");
-  if (!mechanicId || !stillValid || !request || routeIsOffer || dismissedOfferId === offer.id) {
+  if (!mechanicId || !foreground || !stillValid || !request || routeIsOffer || dismissedOfferId === offer.id) {
     return null;
   }
 

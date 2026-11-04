@@ -12,6 +12,7 @@ import {
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { disableFloatingOffers } from "@/services/floating-offers";
+import { unregisterCurrentDevicePushToken } from "@/services/push-notifications";
 import type { ProfileRow } from "@/types/database";
 
 export type AccountRole = "motorist" | "mechanic" | "partsdealer" | "towing" | "rider";
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const nextProfile = await fetchProfile(nextSession.user.id);
+    if (nextProfile?.role !== "mechanic") disableFloatingOffers();
     setProfile(nextProfile);
     return nextProfile;
   }, []);
@@ -141,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Your AutoAssist profile could not be loaded. Please try again.");
     }
 
+    if (nextProfile.role !== "mechanic") disableFloatingOffers();
     setSession(data.session);
     setProfile(nextProfile);
     return nextProfile;
@@ -207,12 +210,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Revoke only this device's token while the user's RLS session is active.
+    // Do not disable notifications on the mechanic's other devices.
+    if (session?.user?.id) {
+      try {
+        await unregisterCurrentDevicePushToken(session.user.id);
+      } catch (error) {
+        console.warn("Could not revoke this device push token", error);
+      }
+    }
     const { error } = await client.auth.signOut();
     if (error) throw error;
     disableFloatingOffers();
     setSession(null);
     setProfile(null);
-  }, []);
+  }, [session?.user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

@@ -4,6 +4,9 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { registerDevicePushToken } from "@/services/dispatch-backend";
+import { requireSupabase } from "@/lib/supabase";
+
+const TOKEN_STORAGE_KEY = "autoassist:devicePushToken";
 
 export type PushRegistrationResult = {
   registered: boolean;
@@ -61,6 +64,7 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     const result = await registerDevicePushToken(userId, token.data, Device.deviceName);
     if (result.error) throw result.error;
+    globalThis.localStorage?.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ userId, token: token.data }));
 
     return {
       registered: true,
@@ -72,4 +76,42 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
       message: error instanceof Error ? error.message : "Unable to register this device for job notifications.",
     };
   }
+}
+
+
+/**
+ * Prevent a phone that was used by a mechanic from continuing to receive
+ * mechanic alerts after switching to a motorist account. Only revoke the
+ * current physical device; leave other mechanic devices subscribed.
+ */
+export async function unregisterCurrentDevicePushToken(userId: string): Promise<void> {
+  if (!Device.isDevice) return;
+  const raw = globalThis.localStorage?.getItem(TOKEN_STORAGE_KEY);
+  let token: string | undefined;
+  if (raw) {
+    try {
+      const saved = JSON.parse(raw) as { userId?: string; token?: string };
+      if (saved.userId === userId) token = saved.token;
+    } catch {
+      // A corrupt local cache should not block logout.
+    }
+  }
+
+  // Older APKs did not cache the token. Resolve the current Expo token
+  // without asking for notification permissions or registering a new one.
+  if (!token) {
+    const permissions = await Notifications.getPermissionsAsync();
+    if (!permissions.granted) return;
+    const projectId = Constants.easConfig?.projectId ??
+      (Constants.expoConfig?.extra?.eas?.projectId as string | undefined);
+    if (!projectId) return;
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  }
+
+  const { error } = await requireSupabase().from("device_push_tokens")
+    .update({ enabled: false })
+    .eq("user_id", userId)
+    .eq("expo_push_token", token);
+  if (error) throw error;
+  if (raw) globalThis.localStorage?.removeItem(TOKEN_STORAGE_KEY);
 }
