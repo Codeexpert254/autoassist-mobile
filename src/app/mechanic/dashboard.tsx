@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
+  const [checkingNotifications, setCheckingNotifications] = useState(false);
 
   const loadProviderState = async () => {
     if (!backendEnabled) {
@@ -160,6 +161,23 @@ export default function Dashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to update availability.");
     } finally {
       setAvailabilityLoading(false);
+    }
+  };
+
+  const checkPhoneAlerts = async () => {
+    if (!user || checkingNotifications) return;
+    setCheckingNotifications(true);
+    setNotificationMessage("Checking phone notification permissions and registration…");
+    try {
+      const result = await ensureJobNotifications(user.id);
+      setNotificationMessage(result.registered
+        ? "Phone alerts registered. AutoAssist can notify you even when the app is in the background."
+        : result.message);
+    } catch (caught) {
+      setNotificationMessage(caught instanceof Error
+        ? caught.message : "Unable to configure phone notifications.");
+    } finally {
+      setCheckingNotifications(false);
     }
   };
 
@@ -339,6 +357,11 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
+          <Pressable style={styles.refreshButton} disabled={checkingNotifications} onPress={() => void checkPhoneAlerts()}>
+            {checkingNotifications
+              ? <ActivityIndicator color="#1857A6" />
+              : <Text style={styles.refreshText}>Check phone notification setup</Text>}
+          </Pressable>
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
           {error ? <Text style={styles.errorTextStandalone}>{error}</Text> : null}
 
