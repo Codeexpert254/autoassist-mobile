@@ -85,12 +85,20 @@ export default function DispatchStatus() {
     }
 
     if ((liveRequest.status === "matching" || liveRequest.status === "offered") && !liveRequest.mechanic_id) {
-      if (forceDispatch || liveRequest.status === "matching") {
-        const result = await dispatchRepairRequest(id);
-        if (result?.state === "no_provider") {
-          setDispatchMessage("No suitable verified mechanic is available right now. You can keep this request open and retry shortly.");
-        } else if (result?.state === "offered") {
-          setDispatchMessage("A highly rated nearby mechanic has been notified. Waiting for their response…");
+      if ((forceDispatch || liveRequest.status === "matching") && !dispatchingRef.current) {
+        dispatchingRef.current = true;
+        try {
+          const result = await dispatchRepairRequest(id, explicitRetry);
+          if (result?.state === "no_provider") {
+            setDispatchMessage(String(result.message || "No suitable mechanic is available. Keep this request open and retry later."));
+          } else if (result?.state === "offered") {
+            setDispatchMessage(result.reoffered
+              ? "Your original request was sent to the mechanic again. Waiting for a response…"
+              : "A nearby verified mechanic has been notified. Waiting for a response…");
+            setRequest((current: any) => current ? { ...current, status: "offered" } : current);
+          }
+        } finally {
+          dispatchingRef.current = false;
         }
       } else {
         setDispatchMessage("A highly rated nearby mechanic has been notified. Waiting for their response…");
