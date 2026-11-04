@@ -236,7 +236,7 @@ internal object OverlayController {
     }, LinearLayout.LayoutParams(dp(context, 9), dp(context, 9)).apply {
       marginEnd = dp(context, 7)
     })
-    header.addView(limitedLabel(context, "New service request for you",
+    header.addView(limitedLabel(context, if (data["type"] == "parts_order_overlay") "New spare-parts order" else "New service request for you",
       12f, Color.rgb(18, 61, 118), 1, true),
       LinearLayout.LayoutParams(0, -2, 1f))
     val timer = label(context, "", 10f, Color.rgb(138, 82, 0), true).apply {
@@ -256,7 +256,7 @@ internal object OverlayController {
           topMargin = dp(context, marginDp)
         })
     }
-    addLine((data["symptom"] ?: "Service request").take(60),
+    addLine((data["symptom"] ?: if (data["type"] == "parts_order_overlay") "Spare part" else "Service request").take(60),
       15f, navy, 1, 8, true)
     addLine((data["description"] ?: "A motorist needs assistance.").take(250),
       11f, Color.rgb(52, 64, 84), 3, 4)
@@ -298,7 +298,11 @@ internal object OverlayController {
 
     val respond = actionButton("View & respond", white, blue, blue) {
       dismiss()
-      val url = Uri.parse("autoassist:///mechanic/job-offer?offerId=${Uri.encode(id)}")
+      val destination = if (data["type"] == "parts_order_overlay")
+        "autoassist:///partsdealer/order-details?orderId=${Uri.encode(id)}"
+      else
+        "autoassist:///mechanic/job-offer?offerId=${Uri.encode(id)}"
+      val url = Uri.parse(destination)
       val intent = Intent(Intent.ACTION_VIEW, url).apply {
         setClassName(context.packageName, "${context.packageName}.MainActivity")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)

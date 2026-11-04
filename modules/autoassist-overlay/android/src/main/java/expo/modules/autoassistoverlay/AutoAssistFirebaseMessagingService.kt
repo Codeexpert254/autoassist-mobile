@@ -14,7 +14,7 @@ class AutoAssistFirebaseMessagingService : ExpoFirebaseMessagingService() {
     super.onMessageReceived(remoteMessage)
     val data = remoteMessage.data
     // Support direct FCM data fields and an Expo envelope containing JSON data.
-    val overlay = if (data["type"] == "mechanic_offer_overlay") data else {
+    val overlay = if (data["type"] == "mechanic_offer_overlay" || data["type"] == "parts_order_overlay") data else {
       val raw = data["data"] ?: data["body"]
       try {
         val json = JSONObject(raw ?: "")
@@ -29,7 +29,7 @@ class AutoAssistFirebaseMessagingService : ExpoFirebaseMessagingService() {
         emptyMap()
       }
     }
-    if (overlay["type"] == "mechanic_offer_overlay") {
+    if (overlay["type"] == "mechanic_offer_overlay" || overlay["type"] == "parts_order_overlay") {
       OverlayController.noteFcmDelivery(applicationContext)
       OverlayController.maybePresent(applicationContext, overlay)
     }
