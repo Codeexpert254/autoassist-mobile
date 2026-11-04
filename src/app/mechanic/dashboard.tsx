@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -37,6 +37,12 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [floatingStatus, setFloatingStatus] = useState(getFloatingOfferStatus);
+
+  // A navigation back from Settings does not change AppState. Refresh the
+  // banner whenever the dashboard regains focus as well.
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS === "android") setFloatingStatus(getFloatingOfferStatus());
+  }, []));
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -364,7 +370,7 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
-          {Platform.OS === "android" && floatingStatus.supported && !(floatingStatus.enabled && floatingStatus.hasPermission) ? (
+          {Platform.OS === "android" && floatingStatus.supported && !floatingStatus.hasPermission ? (
             <View style={styles.alertSetupCard}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Get job alerts over other apps</Text>

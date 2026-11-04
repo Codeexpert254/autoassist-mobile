@@ -1,6 +1,6 @@
-import { StaticScreen } from "@/components/autoassist-ui";
+import { StaticDashboardWithSettings } from "@/components/static-dashboard-with-settings";
 import { dealerScreens } from "@/data/autoassist-screens";
 
 export default function Dashboard() {
-  return <StaticScreen {...dealerScreens.dashboard} />;
+  return <StaticDashboardWithSettings screen={dealerScreens.dashboard} />;
 }
