@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { Platform } from "react-native";
 
 import { DemoToast } from "@/components/demo-toast";
+import { MechanicOfferHeadsUp } from "@/components/mechanic-offer-heads-up";
 import { AuthProvider } from "@/context/auth-context";
 import { DemoAppProvider } from "@/context/demo-app-context";
 import { RepairFlowProvider } from "@/context/repair-flow-context";
@@ -71,6 +72,7 @@ export default function RootLayout() {
             }}
           />
           <NotificationRouter />
+          <MechanicOfferHeadsUp />
           <DemoToast />
         </RepairFlowProvider>
       </DemoAppProvider>
