@@ -7,7 +7,8 @@ import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useAuth } from "@/context/auth-context";
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
+import { dismissFloatingOffer } from "@/services/floating-offers";
 
 import { DemoToast } from "@/components/demo-toast";
 import { AuthProvider } from "@/context/auth-context";
@@ -36,19 +37,28 @@ function NotificationRouter() {
 
       const route = typeof data.route === "string" ? data.route : null;
       if (!route) return;
+      const clearTap = () => {
+        void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
+      };
 
       // Never open mechanic offers when a motorist (or another role) is logged in.
-      if (route.startsWith("/mechanic/") && profile.role !== "mechanic") return;
-      if (route.startsWith("/motorist/") && profile.role !== "motorist") return;
-      if (route.startsWith("/partsdealer/") && profile.role !== "partsdealer") return;
-      if (route.startsWith("/towing/") && profile.role !== "towing") return;
-      if (route.startsWith("/rider/") && profile.role !== "rider") return;
-      if (data.type === "mechanic_offer" && profile.role !== "mechanic") return;
+      if (
+        (route.startsWith("/mechanic/") && profile.role !== "mechanic") ||
+        (route.startsWith("/motorist/") && profile.role !== "motorist") ||
+        (route.startsWith("/partsdealer/") && profile.role !== "partsdealer") ||
+        (route.startsWith("/towing/") && profile.role !== "towing") ||
+        (route.startsWith("/rider/") && profile.role !== "rider") ||
+        (data.type === "mechanic_offer" && profile.role !== "mechanic")
+      ) {
+        clearTap();
+        return;
+      }
 
       const params: Record<string, string> = {};
       if (typeof data.offerId === "string") params.offerId = data.offerId;
       if (typeof data.requestId === "string") params.requestId = data.requestId;
 
+      clearTap();
       router.push({ pathname: route as never, params });
     };
 
@@ -58,6 +68,18 @@ function NotificationRouter() {
     return () => subscription.remove();
   }, [router, loading, user?.id, profile?.role]);
 
+  return null;
+}
+
+function ClearNativeOverlayOnForeground() {
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (AppState.currentState === "active") dismissFloatingOffer();
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active") dismissFloatingOffer();
+    });
+    return () => listener.remove();
+  }, []);
   return null;
 }
 
@@ -81,6 +103,7 @@ export default function RootLayout() {
             }}
           />
           <NotificationRouter />
+          <ClearNativeOverlayOnForeground />
           <DemoToast />
         </RepairFlowProvider>
       </DemoAppProvider>
