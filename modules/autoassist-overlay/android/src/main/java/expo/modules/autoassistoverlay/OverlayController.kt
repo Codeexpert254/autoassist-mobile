@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -208,21 +209,20 @@ internal object OverlayController {
     val gray = Color.rgb(71, 84, 103)
     val white = Color.WHITE
 
-    // Match the AutoAssist in-app card, not the handset's themed Android buttons.
+    // A single vertical root determines the popup height. The original
+    // horizontal wrapper had a MATCH_PARENT stripe that led to a clipped
+    // lower border/button row on Samsung's overlay WindowManager.
     val card = LinearLayout(context).apply {
-      orientation = LinearLayout.HORIZONTAL
-      background = roundedBackground(context, white, Color.rgb(174, 205, 246), 16)
-      elevation = dp(context, 12).toFloat()
-      clipToOutline = true
-    }
-    card.addView(View(context).apply { setBackgroundColor(blue) },
-      LinearLayout.LayoutParams(dp(context, 5), -1))
-
-    val content = LinearLayout(context).apply {
       orientation = LinearLayout.VERTICAL
-      setPadding(dp(context, 14), dp(context, 14), dp(context, 14), dp(context, 14))
+      setPadding(dp(context, 19), dp(context, 14), dp(context, 14), dp(context, 24))
+      val blueUnderlay = roundedBackground(context, blue, blue, 16)
+      val whiteSurface = roundedBackground(context, white, Color.rgb(174, 205, 246), 16)
+      background = LayerDrawable(arrayOf(blueUnderlay, whiteSurface)).apply {
+        setLayerInset(1, dp(context, 5), 0, 0, 0)
+      }
+      elevation = dp(context, 12).toFloat()
     }
-    card.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+    val content = card
 
     val header = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL
@@ -310,9 +310,18 @@ internal object OverlayController {
     })
     content.addView(actions)
 
+    // Measure after adding the action row; an explicit window height avoids
+    // the WRAP_CONTENT measurement cutting off the lower 12-20dp.
+    val overlayWidth = context.resources.displayMetrics.widthPixels - dp(context, 24)
+    card.measure(
+      View.MeasureSpec.makeMeasureSpec(overlayWidth, View.MeasureSpec.EXACTLY),
+      View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+    )
+    val overlayHeight = card.measuredHeight + dp(context, 8)
+
     val params = WindowManager.LayoutParams(
-      context.resources.displayMetrics.widthPixels - dp(context, 24),
-      WindowManager.LayoutParams.WRAP_CONTENT,
+      overlayWidth,
+      overlayHeight,
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT
