@@ -188,6 +188,23 @@ export async function getConnectionContact(requestId: string) {
   return data;
 }
 
+export async function finishConnectionService(requestId: string): Promise<{ state: string; message: string }> {
+  const { data, error } = await requireSupabase().functions.invoke("finish-connection-service", {
+    body: { requestId },
+  });
+  if (error) return throwFunctionError(error, "Unable to mark service finished.");
+  if (data?.error) throw new Error(String(data.error));
+  return {
+    state: String(data?.state ?? ""),
+    message: String(data?.message ?? "The motorist can now rate this service."),
+  };
+}
+
+export async function getServiceRating(requestId: string) {
+  const table = requireSupabase().from("ratings") as any;
+  return table.select("rating, review, created_at").eq("request_id", requestId).maybeSingle();
+}
+
 export async function getMechanicActiveRepairs(mechanicId: string) {
   const table = requireSupabase().from("repair_requests") as any;
   return table
