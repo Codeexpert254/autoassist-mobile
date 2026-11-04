@@ -72,11 +72,11 @@ export default function ConnectionPayment() {
     setStatusNotice("");
     try {
       const result = await checkConnectionPayment(requestId);
-      await load();
       if (result.state === "paid") {
         router.replace({ pathname: "/motorist/mechanic-assigned", params: { requestId } });
         return;
       }
+      await load();
       setStatusNotice(result.message);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to check your M-PESA payment. Try again.");
