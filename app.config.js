@@ -1,11 +1,10 @@
 // Dynamic configuration keeps each developer's local app.json (Firebase,
-// Supabase/EAS IDs, native overlay plugin) intact. Never commit the map key.
+// Supabase/EAS IDs, native overlay plugin) intact. No map key is needed.
 const base = require("./app.json").expo;
 const originalPlugins = base.plugins ?? [];
 const nameOf = (entry) => Array.isArray(entry) ? entry[0] : entry;
 const currentLocation = originalPlugins.find((entry) => nameOf(entry) === "expo-location");
 const locationOptions = Array.isArray(currentLocation) ? currentLocation[1] ?? {} : {};
-const googleMapsApiKey = (process.env.GOOGLE_MAPS_API_KEY ?? "").trim();
 
 module.exports = ({ config }) => ({
   ...config,
@@ -21,10 +20,9 @@ module.exports = ({ config }) => ({
   extra: {
     ...(config.extra ?? {}),
     ...(base.extra ?? {}),
-    googleMapsConfigured: Boolean(googleMapsApiKey),
   },
   plugins: [
-    ...originalPlugins.filter((entry) => !["expo-location", "react-native-maps"].includes(nameOf(entry))),
+    ...originalPlugins.filter((entry) => !["expo-location", "react-native-maps", "@maplibre/maplibre-react-native"].includes(nameOf(entry))),
     // Preserve the single-FCM-service native overlay behavior in clean CI
     // builds as well as local app.json files.
     ...(!originalPlugins.some((entry) => nameOf(entry) === "./plugins/with-autoassist-fcm")
@@ -36,6 +34,7 @@ module.exports = ({ config }) => ({
       isAndroidBackgroundLocationEnabled: true,
       isAndroidForegroundServiceEnabled: true,
     }],
-    ["react-native-maps", googleMapsApiKey ? { androidGoogleMapsApiKey: googleMapsApiKey } : {}],
+    // MapLibre loads OpenFreeMap tiles directly. No Google key or billing.
+    "@maplibre/maplibre-react-native",
   ],
 });

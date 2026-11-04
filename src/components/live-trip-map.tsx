@@ -1,10 +1,9 @@
 import * as Location from "expo-location";
-import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker, Polyline, type LatLng } from "react-native-maps";
+import { Camera, GeoJSONSource, Layer, Map, Marker, type CameraRef } from "@maplibre/maplibre-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -15,7 +14,9 @@ import { startBackgroundTripTracking, stopBackgroundTripTracking } from "@/servi
 import { updateRepairStatus } from "@/services/repair-backend";
 
 type TripRole = "mechanic" | "motorist";
-const mapKeyConfigured = Boolean(Constants.expoConfig?.extra?.googleMapsConfigured);
+// OpenFreeMap public basemap: no registration, billing or API key required.
+const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+type LatLng = { latitude: number; longitude: number };
 const validPoint = (latitude: unknown, longitude: unknown): LatLng | null => {
   const lat = Number(latitude), lon = Number(longitude);
   if (latitude == null || longitude == null || !Number.isFinite(lat) || !Number.isFinite(lon) ||
@@ -52,7 +53,8 @@ export function LiveTripMap({ role }: { role: TripRole }) {
   const [backgroundOn, setBackgroundOn] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const mapRef = useRef<MapView>(null);
+  const cameraRef = useRef<CameraRef>(null);
+  const [mapReady, setMapReady] = useState(false);
   const lastSentAt = useRef(0);
   const mounted = useRef(true);
   const fitted = useRef(false);
@@ -189,25 +191,34 @@ export function LiveTripMap({ role }: { role: TripRole }) {
   }, [role, tripActive, requestId, user?.id]);
 
   const focusMap = () => {
-    if (!destination) return;
-    const points: LatLng[] = mechanicPoint ? [mechanicPoint, destination] : [destination];
-    if (points.length === 2) {
-      mapRef.current?.fitToCoordinates(points, {
-        edgePadding: { top: 95, bottom: 110, left: 65, right: 65 }, animated: true,
+    if (!destination || !mapReady) return;
+    if (mechanicPoint && directKm(destination, mechanicPoint) > 0.03) {
+      cameraRef.current?.fitBounds([
+        Math.min(destination.longitude, mechanicPoint.longitude),
+        Math.min(destination.latitude, mechanicPoint.latitude),
+        Math.max(destination.longitude, mechanicPoint.longitude),
+        Math.max(destination.latitude, mechanicPoint.latitude),
+      ], {
+        padding: { top: 72, right: 48, bottom: 76, left: 48 },
+        duration: 600,
       });
     } else {
-      mapRef.current?.animateToRegion({
-        ...destination, latitudeDelta: 0.02, longitudeDelta: 0.02,
-      }, 500);
+      cameraRef.current?.easeTo({
+        center: [destination.longitude, destination.latitude],
+        zoom: 15,
+        duration: 450,
+      });
     }
   };
 
+  // GPS updates move markers without overriding user gestures. Fit both
+  // points once when the first shared mechanic position is received.
   useEffect(() => {
-    if (fitted.current || !destination || !mechanicPoint || (Platform.OS === "android" && !mapKeyConfigured)) return;
+    if (fitted.current || !mapReady || !destination || !mechanicPoint) return;
     fitted.current = true;
-    const wait = setTimeout(focusMap, 500);
+    const wait = setTimeout(focusMap, 400);
     return () => clearTimeout(wait);
-  }, [destination?.latitude, destination?.longitude, mechanicPoint?.latitude != null]);
+  }, [mapReady, destination?.latitude, destination?.longitude, mechanicPoint?.latitude != null]);
 
   const beginJourney = async () => {
     if (!requestId || !user || working) return;
@@ -290,7 +301,6 @@ export function LiveTripMap({ role }: { role: TripRole }) {
 
   const phone = role === "mechanic" ? cleanPhone(String(contact?.phone ?? "")) : "";
   const distance = destination && mechanicPoint ? directKm(mechanicPoint, destination) : null;
-  const validMap = Platform.OS !== "android" || mapKeyConfigured;
   const subtitle = role === "mechanic" ? "Live journey to the motorist" : "Mechanic's live journey to you";
 
   return (
@@ -325,44 +335,75 @@ export function LiveTripMap({ role }: { role: TripRole }) {
         ) : (
           <>
             <View style={styles.mapContainer}>
-              {validMap ? (
-                <MapView
-                  ref={mapRef}
-                  style={StyleSheet.absoluteFill}
-                  initialRegion={{
-                    ...destination, latitudeDelta: 0.035, longitudeDelta: 0.035,
+              <Map
+                style={StyleSheet.absoluteFill}
+                mapStyle={OPENFREEMAP_STYLE}
+                androidView="texture"
+                compass
+                attribution
+                logo={false}
+                onDidFinishLoadingStyle={() => setMapReady(true)}
+                onDidFailLoadingMap={() => setNotice("Map tiles are unavailable. Check your internet connection and try again.")}
+              >
+                <Camera
+                  ref={cameraRef}
+                  initialViewState={{
+                    center: [destination.longitude, destination.latitude],
+                    zoom: 14,
                   }}
-                  showsCompass
-                  showsScale={false}
-                  toolbarEnabled={false}
-                  showsUserLocation={role === "mechanic"}
-                  onMapReady={focusMap}
-                >
-                  <Marker coordinate={destination} title="Customer" description={String(request?.location_text ?? "")}
-                    pinColor="#E44747" />
-                  {mechanicPoint ? (
-                    <>
-                      <Marker coordinate={mechanicPoint} title={role === "mechanic" ? "You" : "Your mechanic"}
-                        description="Latest shared GPS position" pinColor="#1857A6" />
-                      <Polyline coordinates={[mechanicPoint, destination]}
-                        strokeColor="#1857A6" strokeWidth={3} lineDashPattern={[9, 8]} />
-                    </>
-                  ) : null}
-                </MapView>
-              ) : (
-                <View style={styles.mapUnavailable}>
-                  <SymbolView name={{ ios: "map.fill", android: "map", web: "map" } as never} size={44} tintColor="#1857A6" />
-                  <Text style={styles.emptyTitle}>Google Maps setup needed</Text>
-                  <Text style={styles.muted}>Configure a Maps SDK for Android key and rebuild the development app to display map tiles.</Text>
-                </View>
-              )}
-              {validMap ? (
-                <Pressable style={styles.recenter} accessibilityRole="button" accessibilityLabel="Recenter map"
-                  onPress={focusMap}>
-                  <SymbolView name={{ ios: "location.north.line.fill", android: "my_location", web: "my_location" } as never}
-                    size={22} tintColor="#1857A6" />
-                </Pressable>
-              ) : null}
+                />
+                <Marker id="customer-destination" lngLat={[destination.longitude, destination.latitude]}>
+                  <View style={styles.customerMarker}>
+                    <SymbolView name={{ ios: "mappin", android: "place", web: "place" } as never} size={23} tintColor="#FFFFFF" />
+                  </View>
+                </Marker>
+                {mechanicPoint ? (
+                  <>
+                    <GeoJSONSource
+                      id="trip-direct-distance"
+                      data={{
+                        type: "Feature",
+                        geometry: {
+                          type: "LineString",
+                          coordinates: [
+                            [mechanicPoint.longitude, mechanicPoint.latitude],
+                            [destination.longitude, destination.latitude],
+                          ],
+                        },
+                        properties: {},
+                      }}
+                    >
+                      <Layer id="trip-direct-distance-line" source="trip-direct-distance" type="line"
+                        paint={{
+                          "line-color": "#1857A6",
+                          "line-width": 3,
+                          "line-opacity": 0.85,
+                          "line-dasharray": [2, 2],
+                        }}
+                      />
+                    </GeoJSONSource>
+                    <Marker id="mechanic-position" lngLat={[mechanicPoint.longitude, mechanicPoint.latitude]}>
+                      <View style={styles.mechanicMarker}>
+                        <SymbolView name={{ ios: "car.fill", android: "directions_car", web: "directions_car" } as never}
+                          size={21} tintColor="#FFFFFF" />
+                      </View>
+                    </Marker>
+                  </>
+                ) : null}
+              </Map>
+              <Pressable style={styles.recenter} accessibilityRole="button" accessibilityLabel="Recenter map"
+                onPress={focusMap}>
+                <SymbolView name={{ ios: "location.north.line.fill", android: "my_location", web: "my_location" } as never}
+                  size={22} tintColor="#1857A6" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="OpenStreetMap map attribution"
+                style={styles.mapCredit}
+                onPress={() => void Linking.openURL("https://www.openstreetmap.org/copyright")}
+              >
+                <Text style={styles.mapCreditText}>© OpenStreetMap · OpenFreeMap</Text>
+              </Pressable>
             </View>
 
             <View style={styles.tripInfo}>
@@ -459,8 +500,11 @@ const styles = StyleSheet.create({
   emptyTitle: { fontFamily: "Inter_600SemiBold", fontSize: 17, color: "#102A43", textAlign: "center" },
   muted: { fontFamily: "Inter_400Regular", fontSize: 12, lineHeight: 19, color: "#667085", textAlign: "center" },
   mapContainer: { flex: 1, minHeight: 240, position: "relative", backgroundColor: "#EAF2FD" },
-  mapUnavailable: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28, gap: 12 },
-  recenter: { position: "absolute", right: 16, bottom: 18, width: 46, height: 46, borderRadius: 15, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF", elevation: 3 },
+  customerMarker: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#DE4A4A", alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#FFFFFF", elevation: 5 },
+  mechanicMarker: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#FFFFFF", elevation: 5 },
+  mapCredit: { position: "absolute", bottom: 10, left: 10, backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 5, paddingHorizontal: 6, paddingVertical: 4 },
+  mapCreditText: { color: "#475467", fontSize: 9, fontFamily: "Inter_400Regular" },
+  recenter: { position: "absolute", right: 16, bottom: 34, width: 46, height: 46, borderRadius: 15, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF", elevation: 3 },
   tripInfo: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 16, borderTopWidth: 1, borderTopColor: "#EAECF0", backgroundColor: "#FFFFFF" },
   topLine: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoIcon: { width: 39, height: 39, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#F0F7FF" },
