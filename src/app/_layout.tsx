@@ -9,6 +9,7 @@ import { useAuth } from "@/context/auth-context";
 import { useEffect } from "react";
 import { AppState, Platform } from "react-native";
 import { dismissFloatingOffer } from "@/services/floating-offers";
+import "@/services/trip-background";
 
 import { DemoToast } from "@/components/demo-toast";
 import { AuthProvider } from "@/context/auth-context";

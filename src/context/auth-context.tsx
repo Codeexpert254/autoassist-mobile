@@ -12,6 +12,7 @@ import {
 
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { disableFloatingOffers } from "@/services/floating-offers";
+import { stopBackgroundTripTracking } from "@/services/trip-background";
 import { unregisterCurrentDevicePushToken } from "@/services/push-notifications";
 import type { ProfileRow } from "@/types/database";
 
@@ -203,6 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // End opt-in trip GPS sharing before invalidating the auth session.
+    await stopBackgroundTripTracking();
     const client = supabase;
     if (!client) {
       disableFloatingOffers();
