@@ -112,23 +112,9 @@ export default function JobDetails() {
     }
   };
 
-  const openNavigation = async () => {
-    if (!request) return;
-    const hasCoordinates = request.latitude != null && request.longitude != null;
-    const destination = hasCoordinates
-      ? `${request.latitude},${request.longitude}`
-      : String(contact?.serviceLocation || request.location_text || "");
-    if (!destination) {
-      setError("Customer location is unavailable. Contact the motorist for directions.");
-      return;
-    }
-    try {
-      await Linking.openURL(
-        `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`,
-      );
-    } catch {
-      setError("Unable to open navigation. Check that a maps application is available.");
-    }
+  const showMap = () => {
+    if (!requestId) return;
+    router.push({ pathname: "/mechanic/navigation", params: { requestId } });
   };
 
   if (loading) {
@@ -215,35 +201,38 @@ export default function JobDetails() {
                 </View>
               </View>
               <Detail label="Customer" value={contact?.name || "Motorist"} />
-              <Detail label="Phone" value={contact?.phone || "Not provided"} />
               <Detail label="Service location" value={contact?.serviceLocation || request.location_text} />
 
               {contact?.phone ? (
-                <>
-                  <Pressable style={styles.callButton} onPress={() => void Linking.openURL(`tel:${contact.phone}`)}>
-                    <Text style={styles.callText}>Call customer</Text>
+                <View style={styles.contactActions}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Call customer"
+                    style={[styles.contactAction, styles.callAction]}
+                    onPress={() => void Linking.openURL(`tel:${String(contact.phone).replace(/[^0-9+]/g, "")}`)}>
+                    <SymbolView name={{ ios: "phone.fill", android: "call", web: "call" } as never}
+                      size={19} tintColor="#FFFFFF" />
+                    <Text style={styles.callActionText}>Call</Text>
                   </Pressable>
-                  <Pressable style={styles.callButton} onPress={() => void Linking.openURL(`sms:${contact.phone}`)}>
-                    <Text style={styles.callText}>Message customer (SMS)</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Message customer"
+                    style={[styles.contactAction, styles.messageAction]}
+                    onPress={() => void Linking.openURL(`sms:${String(contact.phone).replace(/[^0-9+]/g, "")}`)}>
+                    <SymbolView name={{ ios: "message.fill", android: "sms", web: "sms" } as never}
+                      size={19} tintColor="#1857A6" />
+                    <Text style={styles.messageActionText}>Message</Text>
                   </Pressable>
-                </>
+                </View>
               ) : null}
 
-              {status !== "completed" && status !== "repair-complete" ? (
-                <Pressable style={styles.callButton} onPress={() => void openNavigation()}>
-                  <Text style={styles.callText}>Open directions to customer</Text>
+              {(status === "connected" || status === "en-route") ? (
+                <Pressable style={styles.primaryButton}
+                  accessibilityRole="button" accessibilityLabel="Navigate to customer in AutoAssist"
+                  onPress={showMap}>
+                  <SymbolView name={{ ios: "map.fill", android: "map", web: "map" } as never}
+                    size={18} tintColor="#FFFFFF" />
+                  <Text style={styles.primaryText}>Navigate to customer</Text>
                 </Pressable>
               ) : null}
 
-              {status === "connected" ? (
-                <Pressable style={styles.primaryButton} disabled={updating} onPress={() => void changeStatus("en-route")}>
-                  {updating ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Start journey to customer</Text>}
-                </Pressable>
-              ) : status === "en-route" ? (
-                <Pressable style={styles.primaryButton} disabled={updating} onPress={() => void changeStatus("arrived")}>
-                  {updating ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>I have arrived</Text>}
-                </Pressable>
-              ) : status === "arrived" ? (
+              {status === "arrived" ? (
                 <View style={styles.servicePhase}>
                   <Text style={styles.serviceTitle}>You're with the customer</Text>
                   <Text style={styles.serviceHint}>Your work with the motorist takes place directly, outside AutoAssist. When your visit is finished, mark it complete so the motorist can rate you.</Text>
@@ -319,9 +308,13 @@ const styles = StyleSheet.create({
   successHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 7 },
   contactTitle: { color: "#176B45", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   contactSubtitle: { color: "#667085", fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 2 },
-  callButton: { minHeight: 43, borderRadius: 10, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 10, backgroundColor: "#FFFFFF" },
-  callText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  primaryButton: { minHeight: 48, borderRadius: 11, backgroundColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 10 },
+  contactActions: { flexDirection: "row", justifyContent: "space-between", gap: 12, marginTop: 14 },
+  contactAction: { minHeight: 46, borderRadius: 12, flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  callAction: { backgroundColor: "#1857A6" },
+  messageAction: { borderWidth: 1, borderColor: "#1857A6", backgroundColor: "#FFFFFF" },
+  callActionText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  messageActionText: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  primaryButton: { minHeight: 48, borderRadius: 11, backgroundColor: "#1857A6", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 10 },
   primaryText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   errorText: { color: "#D9363E", backgroundColor: "#FFF1F2", borderRadius: 10, padding: 10, fontSize: 10, lineHeight: 15, fontFamily: "Inter_400Regular", marginTop: 14 },
   refreshButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 14 },
