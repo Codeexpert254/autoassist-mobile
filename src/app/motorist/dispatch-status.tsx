@@ -21,6 +21,7 @@ export default function DispatchStatus() {
   const { backendEnabled, user, profile } = useAuth();
   const { state, refreshBackend } = useRepairFlow();
   const creatingRef = useRef(false);
+  const dispatchingRef = useRef(false);
 
   const [requestId, setRequestId] = useState<string | null>(parameterRequestId ?? null);
   const [request, setRequest] = useState<any>(null);
@@ -29,6 +30,7 @@ export default function DispatchStatus() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const createRequest = async () => {
     if (!backendEnabled) {
@@ -69,7 +71,7 @@ export default function DispatchStatus() {
     }
   };
 
-  const refresh = async (id: string, forceDispatch = false) => {
+  const refresh = async (id: string, forceDispatch = false, explicitRetry = false) => {
     const requestResult = await getDispatchRequest(id);
     if (requestResult.error) throw requestResult.error;
     const liveRequest = requestResult.data;
