@@ -46,7 +46,7 @@ function NotificationRouter() {
       if (
         (route.startsWith("/mechanic/") && profile.role !== "mechanic") ||
         (route.startsWith("/motorist/") && profile.role !== "motorist") ||
-        (route.startsWith("/partsdealer/") && profile.role !== "partsdealer") ||
+        (route.startsWith("/partsdealer/") && profile.role !== "partsdealer" && !(profile.role === "mechanic" && profile.provider_type === "garage")) ||
         (route.startsWith("/towing/") && profile.role !== "towing") ||
         (route.startsWith("/rider/") && profile.role !== "rider") ||
         (data.type === "mechanic_offer" && profile.role !== "mechanic")
@@ -58,6 +58,7 @@ function NotificationRouter() {
       const params: Record<string, string> = {};
       if (typeof data.offerId === "string") params.offerId = data.offerId;
       if (typeof data.requestId === "string") params.requestId = data.requestId;
+      if (typeof data.orderId === "string") params.orderId = data.orderId;
 
       clearTap();
       router.push({ pathname: route as never, params });

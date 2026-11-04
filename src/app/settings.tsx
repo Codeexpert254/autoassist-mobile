@@ -6,6 +6,7 @@ import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
+import { requireSupabase } from "@/lib/supabase";
 import { getMechanicProfile } from "@/services/repair-backend";
 import { ensureJobNotifications } from "@/services/push-notifications";
 import {
@@ -28,6 +29,7 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [debug, setDebug] = useState("");
+  const [admin, setAdmin] = useState(false);
   const askedForOverlay = useRef(false);
   const mechRef = useRef<any>(null);
   mechRef.current = mechanic;
@@ -132,6 +134,17 @@ export default function Settings() {
     }
   };
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void requireSupabase().rpc("is_autoassist_admin" as never, {
+      p_user_id: user.id, p_required_role: null,
+    } as never).then(({ data }) => {
+      if (active) setAdmin(Boolean(data));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [user?.id]);
+
   const floatingActive = floating.enabled && floating.hasPermission;
   return (
     <View style={styles.screen}>
@@ -213,6 +226,16 @@ export default function Settings() {
               </Pressable>
             ) : null}
           </View>
+
+          {admin ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Marketplace administration</Text>
+              <Text style={styles.helper}>Verify shops and delivery riders, and manage the parts commission.</Text>
+              <Pressable style={styles.secondaryButton} onPress={() => router.push("/admin/parts-marketplace")}>
+                <Text style={styles.secondaryText}>Review parts shops and riders</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {message ? <Text style={styles.notice}>{message}</Text> : null}
 

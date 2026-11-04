@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const nextProfile = await fetchProfile(nextSession.user.id);
-    if (nextProfile?.role !== "mechanic") disableFloatingOffers();
+    if (nextProfile?.role !== "mechanic" && nextProfile?.role !== "partsdealer") disableFloatingOffers();
     setProfile(nextProfile);
     return nextProfile;
   }, []);
@@ -145,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error("Your AutoAssist profile could not be loaded. Please try again.");
     }
 
-    if (nextProfile.role !== "mechanic") disableFloatingOffers();
+    if (nextProfile.role !== "mechanic" && nextProfile.role !== "partsdealer") disableFloatingOffers();
     setSession(data.session);
     setProfile(nextProfile);
     return nextProfile;

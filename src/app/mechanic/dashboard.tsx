@@ -354,6 +354,22 @@ export default function Dashboard() {
           {notificationMessage ? <Text style={styles.successNotice}>{notificationMessage}</Text> : null}
           {error ? <Text style={styles.errorTextStandalone}>{error}</Text> : null}
 
+          {isGarage ? (
+            <View style={[styles.profileCard, { marginTop: 15 }]}>
+              <View style={styles.offerHeading}>
+                <SymbolView name={{ ios: "shippingbox.fill", android: "inventory_2", web: "inventory_2" } as never}
+                  size={23} tintColor="#1857A6" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Sell spare parts from your garage</Text>
+                  <Text style={styles.cardText}>Registered garages can apply as a parts seller, manage inventory and receive customer orders.</Text>
+                </View>
+              </View>
+              <Pressable style={styles.refreshButton} onPress={() => router.push("/partsdealer/dashboard")}>
+                <Text style={styles.refreshText}>Open garage parts shop</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           <View style={styles.metricsRow}>
             <Metric label="Rating" value={rating > 0 ? rating.toFixed(1) : "New"} />
             <Metric label="Completed" value={String(mechanicProfile?.completed_jobs ?? 0)} />
