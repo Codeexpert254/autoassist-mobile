@@ -165,11 +165,20 @@ export default function JobDetails() {
             </View>
           ) : (
             <View style={styles.contactCard}>
+              {payment?.provider === "sandbox_simulator" ? (
+                <View style={styles.testBanner}>
+                  <Text style={styles.testBannerText}>SANDBOX TEST PAYMENT — No real M-PESA money was collected.</Text>
+                </View>
+              ) : null}
               <View style={styles.successHeading}>
                 <SymbolView name="checkmark.shield.fill" size={25} tintColor="#1B8A5A" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.contactTitle}>Connection confirmed</Text>
-                  <Text style={styles.contactSubtitle}>You can now coordinate directly with the motorist.</Text>
+                  <Text style={styles.contactSubtitle}>
+                    {payment?.provider === "sandbox_simulator"
+                      ? "Test connection unlocked to verify the repair journey."
+                      : "You can now coordinate directly with the motorist."}
+                  </Text>
                 </View>
               </View>
               <Detail label="Customer" value={contact?.name || "Motorist"} />
@@ -219,6 +228,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  testBanner: { borderRadius: 10, backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F5D48A", padding: 12, marginBottom: 12 },
+  testBannerText: { color: "#8A5200", fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   safeArea: { flex: 1 },
   center: { alignItems: "center", justifyContent: "center", gap: 10 },
