@@ -61,8 +61,8 @@ async function sendPush(service: any, userId: string, requestId: string, offerId
     sound: "default",
     priority: "high",
     channelId: "jobs",
-    title: "New AutoAssist request nearby",
-    body: `${request.symptom}: ${String(request.description).slice(0, 90)}`,
+    title: `New ${String(request.symptom).slice(0, 25)} request nearby`,
+    body: `${String(request.description).slice(0, 95)} • ${String(request.location_text).slice(0, 45)} • ${String(request.preferred_time).slice(0, 30)}`,
     data: { type: "mechanic_offer", route: "/mechanic/job-offer", offerId, requestId },
   }));
 
