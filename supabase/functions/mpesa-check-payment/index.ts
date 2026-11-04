@@ -163,6 +163,16 @@ Deno.serve(async (req) => {
     });
     const result = await checkResponse.json().catch(() => ({}));
     if (!checkResponse.ok || String(result.ResponseCode ?? "") !== "0") {
+      // Never log the customer's phone, checkout ID, receipt, token,
+      // Authorization headers, credentials or raw Daraja responses.
+      // These safe diagnostic codes identify sandbox/provider problems
+      // without altering or retrying the financial transaction.
+      console.warn("Daraja STK status query not confirmed", {
+        httpStatus: checkResponse.status,
+        responseCode: String(result.ResponseCode ?? "missing").slice(0, 40),
+        errorCode: String(result.errorCode ?? result.ErrorCode ?? "missing").slice(0, 40),
+        hasFinalResult: result.ResultCode !== undefined && result.ResultCode !== null,
+      });
       // A failed status query is not evidence of a failed payment.
       return json({
         state: "pending",
