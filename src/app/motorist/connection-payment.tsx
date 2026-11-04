@@ -119,11 +119,8 @@ export default function ConnectionPayment() {
 
   const amount = Number(request?.connection_fee_amount ?? payment?.amount ?? 500);
   const status = String(payment?.status ?? "not_started");
+  // A pending checkout must be resolved before attempting another payment.
   const checkoutPending = status === "pending" && Boolean(payment?.checkout_request_id);
-  const initiatedAt = Date.parse(String(payment?.initiated_at ?? ""));
-  // Avoid creating overlapping STK requests while an existing one is active.
-  const recentPending = checkoutPending && Number.isFinite(initiatedAt) &&
-    Date.now() - initiatedAt < 3 * 60 * 1000;
 
   return (
     <View style={styles.screen}>
@@ -193,14 +190,13 @@ export default function ConnectionPayment() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <Pressable
-            style={[styles.primaryButton, (paying || checking || recentPending) && styles.disabledButton]}
-            disabled={paying || checking || recentPending}
+            style={[styles.primaryButton, (paying || checking || checkoutPending) && styles.disabledButton]}
+            disabled={paying || checking || checkoutPending}
             onPress={() => void startPayment()}
           >
             {paying ? <ActivityIndicator color="#FFFFFF" /> : (
               <Text style={styles.primaryText}>
-                {recentPending ? "Payment request in progress" :
-                  checkoutPending ? "Retry M-PESA request" :
+                {checkoutPending ? "Payment request in progress" :
                   `Pay KES ${amount.toLocaleString()} with M-PESA`}
               </Text>
             )}
