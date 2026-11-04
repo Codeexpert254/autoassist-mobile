@@ -5,10 +5,19 @@ const rpc=async (name:string,args:Record<string,unknown>)=>{
   if(error)throw error;return String(data??"");
 };
 export async function orderPart(partId:string,quantity:number,location:string,phone:string,repairId?:string|null,note="") {
-  return rpc("place_parts_order",{
+  const orderId=await rpc("place_parts_order",{
     p_part_id:partId,p_quantity:quantity,p_delivery_location:location,
     p_delivery_phone:phone,p_repair_request_id:repairId??null,p_note:note,
   });
+  // The server validates buyer ownership before sending push notifications.
+  // Notification failures never undo a successfully created order.
+  try {
+    const result=await client().functions.invoke("parts-order-notify",{body:{orderId}});
+    if(result.error)console.warn("Dealer push could not be sent",result.error.message);
+  } catch(error) {
+    console.warn("Parts order created, but dealer push is unavailable",error);
+  }
+  return orderId;
 }
 export const respondToPartOrder=(id:string,accept:boolean,outOfStock=false)=>
   rpc("respond_parts_order",{p_order_id:id,p_accept:accept,p_out_of_stock:outOfStock});
