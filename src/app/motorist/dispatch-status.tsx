@@ -61,8 +61,8 @@ export default function DispatchStatus() {
       setRequest(result.data);
       setDispatchMessage("Finding the best verified mechanic for you…");
 
-      // Keep the shared repair context attached to the same live request so the
-      // existing inspection/quote/history lifecycle continues from this dispatch.
+      // Keep the shared service connection attached to the same live request.
+      // Retrying does not require describing the problem again.
       await refreshBackend();
 
       return result.data.id as string;
@@ -210,7 +210,7 @@ export default function DispatchStatus() {
               <Text style={styles.feeTitle}>AutoAssist connection fee</Text>
               <Text style={styles.feeAmount}>KES 500</Text>
               <Text style={styles.centerText}>
-                Pay once to unlock direct contact and location details. Repair labour and parts are separate and will be quoted by the mechanic.
+                Pay once to unlock direct contact with the mechanic. Service arrangements happen independently between you and the provider.
               </Text>
               <Pressable
                 style={styles.primaryButton}
@@ -251,8 +251,8 @@ export default function DispatchStatus() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {!accepted && !connected && requestId ? (
-            <Pressable style={styles.retryButton} onPress={() => void refresh(requestId, true)}>
-              <Text style={styles.retryText}>Retry matching now</Text>
+            <Pressable style={[styles.retryButton, retrying && styles.retryButtonBusy]} disabled={retrying} onPress={() => void retryMatching()}>
+              {retrying ? <ActivityIndicator color="#1857A6" /> : <Text style={styles.retryText}>Retry matching — keep this request</Text>}
             </Pressable>
           ) : null}
 
@@ -297,6 +297,7 @@ const styles = StyleSheet.create({
   primaryText: { color: "#FFFFFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   errorText: { color: "#D9363E", backgroundColor: "#FFF1F2", padding: 11, borderRadius: 10, fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 14 },
   retryButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 14 },
+  retryButtonBusy: { opacity: 0.5 },
   retryText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   cancelButton: { minHeight: 42, alignItems: "center", justifyContent: "center", marginTop: 8 },
   cancelText: { color: "#D9363E", fontSize: 11, fontFamily: "Inter_600SemiBold" },
