@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - motorist-mechanic-functional
+      - feature/android-floating-mechanic-offers
   pull_request:
     branches:
       - functional-demo
       - main
+      - motorist-mechanic-functional
 
 jobs:
   typecheck:
@@ -27,3 +29,9 @@ jobs:
 
       - name: TypeScript
         run: npx tsc --noEmit
+
+      - name: Confirm generated Android manifest has native overlay FCM service
+        run: |
+          npx expo prebuild --platform android --clean --no-install
+          grep -q 'AutoAssistFirebaseMessagingService' android/app/src/main/AndroidManifest.xml
+          grep -q 'ExpoFirebaseMessagingService' android/app/src/main/AndroidManifest.xml
