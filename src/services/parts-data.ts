@@ -19,7 +19,7 @@ export type PartOrder = {
   repair_request_id: string | null; quantity: number; unit_price_kes: number; subtotal_kes: number;
   commission_percent: number; commission_kes: number; delivery_location: string;
   delivery_phone: string; note: string; status: string; decline_reason: string | null;
-  payment_status: string; commission_status: string; created_at: string;
+  payment_method: string; payment_status: string; commission_status: string; created_at: string;
   parts_inventory?: Part; parts_shops?: PartsShop;
 };
 const client = () => requireSupabase();
