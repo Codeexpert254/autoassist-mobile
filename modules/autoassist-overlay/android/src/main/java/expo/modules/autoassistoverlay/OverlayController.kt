@@ -214,7 +214,7 @@ internal object OverlayController {
     // lower border/button row on Samsung's overlay WindowManager.
     val card = LinearLayout(context).apply {
       orientation = LinearLayout.VERTICAL
-      setPadding(dp(context, 19), dp(context, 14), dp(context, 14), dp(context, 24))
+      setPadding(dp(context, 19), dp(context, 14), dp(context, 14), dp(context, 14))
       val blueUnderlay = roundedBackground(context, blue, blue, 16)
       val whiteSurface = roundedBackground(context, white, Color.rgb(174, 205, 246), 16)
       background = LayerDrawable(arrayOf(blueUnderlay, whiteSurface)).apply {
@@ -265,13 +265,21 @@ internal object OverlayController {
     addLine("🕒 " + (data["preferredTime"] ?: "As soon as possible").take(90),
       10f, gray, 1, 5)
 
+    // Keep a fixed-height button row and put its top spacing on the ROW.
+    // A WRAP_CONTENT row with top margins on weighted children can measure
+    // shorter than the children on Samsung and clip both rounded bottoms.
     val actions = LinearLayout(context).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
+      clipChildren = false
+      clipToPadding = false
     }
-    // Samsung's native Button applies minimum heights and background insets
-    // that get cropped inside a 43dp row. Explicit TextView tap targets
-    // have no theme-dependent inset and retain their rounded bottom corners.
+    val actionRowParams = LinearLayout.LayoutParams(
+      LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 44)
+    ).apply {
+      topMargin = dp(context, 12)
+    }
+    // TextViews bypass theme-dependent Android Button background insets.
     fun actionButton(text: String, foreground: Int, fill: Int, stroke: Int,
       onTap: () -> Unit
     ): TextView = label(context, text, 11f, foreground, true).apply {
@@ -286,9 +294,7 @@ internal object OverlayController {
     val dismiss = actionButton("Dismiss", gray, white, Color.rgb(208, 213, 221)) {
       dismiss()
     }
-    actions.addView(dismiss, LinearLayout.LayoutParams(0, dp(context, 42), 1f).apply {
-      topMargin = dp(context, 12)
-    })
+    actions.addView(dismiss, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
 
     val respond = actionButton("View & respond", white, blue, blue) {
       dismiss()
@@ -304,11 +310,10 @@ internal object OverlayController {
         context.packageManager.getLaunchIntentForPackage(context.packageName)?.let(context::startActivity)
       }
     }
-    actions.addView(respond, LinearLayout.LayoutParams(0, dp(context, 42), 2f).apply {
-      topMargin = dp(context, 12)
+    actions.addView(respond, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 2f).apply {
       marginStart = dp(context, 9)
     })
-    content.addView(actions)
+    content.addView(actions, actionRowParams)
 
     // Measure after adding the action row; an explicit window height avoids
     // the WRAP_CONTENT measurement cutting off the lower 12-20dp.
