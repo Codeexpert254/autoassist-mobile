@@ -92,6 +92,15 @@ Deno.serve(async (req) => {
   const { data: payment, error: paymentError } = await service
     .from("connection_payments").select("*").eq("request_id", requestId).maybeSingle();
   if (paymentError) return json({ error: "Unable to load connection payment." }, 500);
+  if (payment?.provider === "sandbox_simulator") {
+    return json({
+      state: payment.status === "paid" ? "paid" : "failed",
+      simulated: true,
+      message: payment.status === "paid"
+        ? "SANDBOX TEST SUCCESS: Contact is unlocked. No real M-PESA funds were collected."
+        : "SANDBOX TEST FAILURE: No real M-PESA funds were collected. Contact remains locked.",
+    });
+  }
   if (!payment || !payment.checkout_request_id) {
     return json({ state: "not_started", message: "No M-PESA checkout request has been started for this connection." });
   }
