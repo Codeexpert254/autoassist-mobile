@@ -30,6 +30,42 @@ This is the private operations console for AutoAssist administrators. It is inte
 
 4. Open `http://localhost:4173` in a browser and sign in with an authorized Supabase Auth account.
 
+## Sandbox payment testing (super-admin only)
+
+The **Sandbox testing** admin section allows an authorized super-admin to simulate
+success or failure of the KES 500 motorist connection fee, without invoking Daraja
+or transferring money. This is **not** part of the mobile application's routes or bundle.
+
+It is deliberately disabled unless both server-only Edge Function secrets are set:
+
+- `MPESA_ENV=sandbox`
+- `AUTOASSIST_PAYMENT_SIMULATOR_ENABLED=true`
+
+Set these via **Supabase Dashboard → Edge Functions → Secrets**; never put the
+opt-in flag or any Daraja secret in `EXPO_PUBLIC_` variables or in browser config.
+Switching `MPESA_ENV` to `production` disables simulation regardless of the flag.
+Turn the flag off when testing is complete.
+
+To test:
+
+1. With the two Android phones, create a repair request and have the mechanic accept it.
+2. In this admin web console, sign in as an authorized **super_admin**.
+3. Open **Sandbox testing**. Locate the accepted repair request (KES 500).
+4. Choose **Simulate success** or **Simulate failure**, then type the required
+   confirmation phrase exactly.
+5. On the mobile devices, refresh the assignment/payment screen. A successful
+   simulation unlocks contact details and attempts to push test-only notifications.
+
+Safety limitations:
+
+- All actions are checked on the server for admin role and sandbox opt-in.
+- An actual paid/refunded transaction or an active Daraja checkout cannot be simulated.
+- Simulation creates/updates a record using `provider=sandbox_simulator`, not `mpesa`.
+- Simulated fee amounts are **excluded from real revenue metrics** in this console.
+- The database RPC is atomic and callable only by Supabase's `service_role`.
+- No genuine Safaricom payment or receipt is produced.
+- The simulator is **not a substitute** for verifying Daraja settlement before launch.
+
 ## Current live modules
 
 - Overview
@@ -37,6 +73,7 @@ This is the private operations console for AutoAssist administrators. It is inte
 - Users
 - Live repair jobs
 - Connection payments
+- Super-admin-only sandbox payment testing (opt-in)
 - Analytics
 - Admin settings / role visibility
 
