@@ -25,6 +25,10 @@ module.exports = ({ config }) => ({
   },
   plugins: [
     ...originalPlugins.filter((entry) => !["expo-location", "react-native-maps"].includes(nameOf(entry))),
+    // Preserve the single-FCM-service native overlay behavior in clean CI
+    // builds as well as local app.json files.
+    ...(!originalPlugins.some((entry) => nameOf(entry) === "./plugins/with-autoassist-fcm")
+      ? ["./plugins/with-autoassist-fcm"] : []),
     ["expo-location", {
       ...locationOptions,
       // Android location access is requested only after the mechanic begins
