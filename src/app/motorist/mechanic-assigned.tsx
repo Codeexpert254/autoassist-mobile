@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, Vi
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useRepairFlow } from "@/context/repair-flow-context";
-import { getConnectionContact, getDispatchRequest } from "@/services/dispatch-backend";
+import { getConnectionContact, getConnectionPayment, getDispatchRequest } from "@/services/dispatch-backend";
 
 export default function MechanicAssigned() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function MechanicAssigned() {
   const requestId = parameterRequestId ?? state.requestId ?? undefined;
 
   const [request, setRequest] = useState<any>(null);
+  const [payment, setPayment] = useState<any>(null);
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -28,9 +29,14 @@ export default function MechanicAssigned() {
 
     setError("");
     try {
-      const requestResult = await getDispatchRequest(requestId);
+      const [requestResult, paymentResult] = await Promise.all([
+        getDispatchRequest(requestId),
+        getConnectionPayment(requestId),
+      ]);
       if (requestResult.error) throw requestResult.error;
+      if (paymentResult.error) throw paymentResult.error;
       setRequest(requestResult.data);
+      setPayment(paymentResult.data);
 
       const result = await getConnectionContact(requestId);
       setContact(result?.contact ?? null);
@@ -100,8 +106,18 @@ export default function MechanicAssigned() {
                   <SymbolView name="checkmark.shield.fill" size={29} tintColor="#1B8A5A" />
                 </View>
                 <Text style={styles.successTitle}>Connection confirmed</Text>
-                <Text style={styles.successText}>The KES 500 AutoAssist connection fee is confirmed. You and the mechanic can now coordinate this repair.</Text>
+                <Text style={styles.successText}>
+                  {payment?.provider === "sandbox_simulator"
+                    ? "TEST CONNECTION — A KES 500 payment was simulated. No actual M-PESA money was collected."
+                    : "The KES 500 AutoAssist connection fee is confirmed. You and the mechanic can now coordinate this repair."}
+                </Text>
               </View>
+
+              {payment?.provider === "sandbox_simulator" ? (
+                <View style={styles.testBanner}>
+                  <Text style={styles.testBannerText}>SANDBOX TEST ONLY — No real payment was made.</Text>
+                </View>
+              ) : null}
 
               <View style={styles.mechanicCard}>
                 <Text style={styles.eyebrow}>ASSIGNED MECHANIC</Text>
@@ -128,7 +144,11 @@ export default function MechanicAssigned() {
 
               <View style={styles.noteCard}>
                 <Text style={styles.noteTitle}>Repair pricing is separate</Text>
-                <Text style={styles.noteText}>The KES 500 fee pays AutoAssist for making the verified connection. The mechanic will inspect the vehicle and send the repair labour/parts quote separately.</Text>
+                <Text style={styles.noteText}>
+                  {payment?.provider === "sandbox_simulator"
+                    ? "This is an end-to-end service-flow test. No KES 500 fee was charged. In a live service, the actual connection fee is separate from repair labour and parts."
+                    : "The KES 500 fee pays AutoAssist for making the verified connection. The mechanic will inspect the vehicle and send the repair labour/parts quote separately."}
+                </Text>
               </View>
             </>
           )}
@@ -152,6 +172,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  testBanner: { borderRadius: 10, backgroundColor: "#FFF7E8", borderWidth: 1, borderColor: "#F5D48A", padding: 12, marginBottom: 12 },
+  testBannerText: { color: "#8A5200", fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   safeArea: { flex: 1 },
   center: { alignItems: "center", justifyContent: "center", gap: 10 },
