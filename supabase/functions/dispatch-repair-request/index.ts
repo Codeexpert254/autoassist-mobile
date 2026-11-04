@@ -110,6 +110,9 @@ Deno.serve(async (req) => {
   const expiredOffers = (offers ?? []).filter((offer: any) => offer.status === "offered" && new Date(offer.expires_at) <= now);
   for (const offer of expiredOffers) {
     await service.from("mechanic_offers").update({ status: "expired", responded_at: now.toISOString() }).eq("id", offer.id).eq("status", "offered");
+    // Keep this in-memory offer state in sync so an explicit retry can
+    // reoffer an expired provider immediately, without a second tap.
+    offer.status = "expired";
   }
 
   const excludedMechanics = new Set((offers ?? []).map((offer: any) => offer.mechanic_id));
