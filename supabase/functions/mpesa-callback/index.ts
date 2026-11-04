@@ -65,7 +65,23 @@ Deno.serve(async (req) => {
     const phone = metadataValue(items, "PhoneNumber");
     const paidAt = new Date().toISOString();
 
-    await service.from("connection_payments").update({
+    // A status-query reconciliation may have already confirmed this payment.
+    // Keep the receipt when it arrives late, but never duplicate the unlock.
+    if (payment.status === "paid") {
+      if (receipt && !payment.mpesa_receipt_number) {
+        await service.from("connection_payments")
+          .update({ mpesa_receipt_number: String(receipt) })
+          .eq("id", payment.id).eq("status", "paid").is("mpesa_receipt_number", null);
+      }
+      return json({ ResultCode: 0, ResultDesc: "Accepted" });
+    }
+
+    if (amount != null && Number(amount) !== Number(payment.amount)) {
+      console.error("Ignoring M-PESA callback with mismatched amount");
+      return json({ ResultCode: 0, ResultDesc: "Callback received" });
+    }
+
+    const { data: confirmed, error: confirmError } = await service.from("connection_payments").update({
       status: "paid",
       amount: amount ?? payment.amount,
       mpesa_receipt_number: receipt ? String(receipt) : null,
@@ -74,12 +90,22 @@ Deno.serve(async (req) => {
       provider_result_message: resultDesc,
       paid_at: paidAt,
       failed_at: null,
-    }).eq("id", payment.id);
+    }).eq("id", payment.id)
+      .eq("checkout_request_id", callback.CheckoutRequestID)
+      .eq("status", "pending")
+      .select("id").maybeSingle();
 
-    await service.from("repair_requests")
+    if (confirmError) {
+      console.error("M-PESA callback payment update failed", confirmError);
+      return json({ error: "Unable to confirm payment" }, 500);
+    }
+    if (!confirmed) return json({ ResultCode: 0, ResultDesc: "Callback already processed" });
+
+    const { error: unlockError } = await service.from("repair_requests")
       .update({ status: "connected", contact_unlocked_at: paidAt })
       .eq("id", payment.request_id)
       .eq("status", "accepted");
+    if (unlockError) console.error("M-PESA callback connection unlock failed", unlockError);
 
     const notificationData = { type: "connection_unlocked", requestId: payment.request_id };
     await Promise.all([
@@ -95,12 +121,15 @@ Deno.serve(async (req) => {
       }),
     ]).catch((error) => console.error("Connection push failed", error));
   } else {
+    // Never downgrade a confirmed payment if a delayed failure arrives.
     await service.from("connection_payments").update({
       status: "failed",
       provider_result_code: resultCode,
       provider_result_message: resultDesc,
       failed_at: new Date().toISOString(),
-    }).eq("id", payment.id);
+    }).eq("id", payment.id)
+      .eq("checkout_request_id", callback.CheckoutRequestID)
+      .eq("status", "pending");
   }
 
   return json({ ResultCode: 0, ResultDesc: "Accepted" });
