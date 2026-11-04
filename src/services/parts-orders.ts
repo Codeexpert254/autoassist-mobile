@@ -21,10 +21,34 @@ export async function orderPart(partId:string,quantity:number,location:string,ph
 }
 export const respondToPartOrder=(id:string,accept:boolean,outOfStock=false)=>
   rpc("respond_parts_order",{p_order_id:id,p_accept:accept,p_out_of_stock:outOfStock});
-export const readyForRider=(id:string)=>
-  rpc("mark_parts_ready",{p_order_id:id});
-export const claimPartDelivery=(id:string)=>
-  rpc("claim_parts_delivery",{p_order_id:id});
+export async function requestRiderDispatch(orderId:string):Promise<{state:string;offerId?:string}> {
+  // The function authenticates the seller/buyer, selects only a ranked verified
+  // available rider and sends a private pickup offer. Never return customer PII.
+  const {data,error}=await client().functions.invoke("parts-rider-dispatch",{body:{orderId}});
+  if(error)throw error;
+  if(data?.error)throw new Error(String(data.error));
+  return {state:String(data?.state??"unknown"),offerId:data?.offerId?String(data.offerId):undefined};
+}
+export async function readyForRider(id:string) {
+  await rpc("mark_parts_ready",{p_order_id:id});
+  // The item remains ready even when no riders are online. Dealer can retry
+  // from the order screen; the dashboard also retries expired offers.
+  try { return await requestRiderDispatch(id); }
+  catch(error) {
+    console.warn("Order marked ready; rider dispatch unavailable",error);
+    return {state:"dispatch_unavailable"};
+  }
+}
+export async function respondToRiderOffer(offerId:string,orderId:string,accept:boolean) {
+  const outcome=await rpc("respond_parts_delivery_offer",{
+    p_offer_id:offerId,p_accept:accept,
+  });
+  if(!accept||outcome==="expired") {
+    try { await requestRiderDispatch(orderId); }
+    catch(error) { console.warn("Could not offer delivery to next rider",error); }
+  }
+  return outcome;
+}
 export const riderPickedUp=(id:string)=>
   rpc("mark_parts_picked_up",{p_order_id:id});
 export const motoristReceivedPart=(id:string)=>
