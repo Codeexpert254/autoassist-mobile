@@ -69,7 +69,7 @@ export default function SparePartsMarketplace(){
                 Number(p.parts_shops?.rating).toFixed(1)+" ★":"New seller"}
             </Text>
           </View>
-        </Press>;
+        </Pressable>;
       })}
       {error?<Notice tone="error">{error}</Notice>:null}
     </>}

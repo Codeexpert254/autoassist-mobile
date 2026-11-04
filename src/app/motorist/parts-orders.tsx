@@ -28,7 +28,7 @@ export default function MotoristPartsOrders(){
       <Text style={partStyles.cardText}>{o.parts_shops?.shop_name}</Text>
       <Text style={partStyles.cardText}>{o.quantity} × {money(o.unit_price_kes)} · {money(o.subtotal_kes)}</Text>
       <Text style={partStyles.cardText}>{new Date(o.created_at).toLocaleString("en-KE")}</Text>
-    </Press>)}
+    </Pressable>)}
     {error?<Notice tone="error">{error}</Notice>:null}
   </PartsPage>;
 }

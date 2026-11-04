@@ -45,7 +45,7 @@ export default function DealerOrders(){
       <Text style={partStyles.cardText}>Quantity: {o.quantity} · {money(o.subtotal_kes)}</Text>
       <Text style={partStyles.cardText}>Delivery: {o.delivery_location}</Text>
       <Text style={[partStyles.cardText,{color:NAVY}]}>{new Date(o.created_at).toLocaleString("en-KE")}</Text>
-    </Press>)}
+    </Pressable>)}
     {error?<Notice tone="error">{error}</Notice>:null}
   </PartsPage>;
 }

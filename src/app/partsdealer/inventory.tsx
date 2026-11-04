@@ -42,7 +42,7 @@ export default function DealerInventory(){
             <Status label={item.stock_quantity===0?"Out of stock":item.stock_quantity+" in stock"} good={item.stock_quantity>0}/>
           </View>
         </View>
-      </Press>;
+      </Pressable>;
     })}
     {error?<Notice tone="error">{error}</Notice>:null}
   </PartsPage>;
