@@ -7,6 +7,7 @@ import { Action, Notice, PartsPage, Section, Status, BLUE, NAVY, partStyles } fr
 import { type PartsShop, type PartOrder, type Part, ownShop, shopOrders,
   inventoryFor, updateShop, subscribeShopOrders, money } from "@/services/parts-data";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { setFloatingOffersOnline } from "@/services/floating-offers";
 
 export default function PartsDealerDashboard() {
   const router=useRouter();
@@ -28,6 +29,7 @@ export default function PartsDealerDashboard() {
       const s=await ownShop(user.id);
       setShop(s);
       if(s){
+        setFloatingOffersOnline(user.id, s.verification_status==="approved" && s.is_open);
         const [o,i]=await Promise.all([shopOrders(s.id),inventoryFor(s.id)]);
         setOrders(o);setInventory(i);
         const pending=o.filter(order=>order.status==="pending_dealer");
@@ -56,7 +58,8 @@ export default function PartsDealerDashboard() {
 
   const toggleOpen=async(v:boolean)=>{
     if(!shop||busy)return;setBusy(true);
-    try{const updated=await updateShop(shop.id,{is_open:v});setShop(updated);}
+    try{const updated=await updateShop(shop.id,{is_open:v});setShop(updated);
+      if(user)setFloatingOffersOnline(user.id, updated.verification_status==="approved" && updated.is_open);}
     catch(e){setError(e instanceof Error?e.message:"Unable to change shop availability.");}
     finally{setBusy(false);}
   };
