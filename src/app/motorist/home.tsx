@@ -2,12 +2,14 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
 import { useDemoApp } from "@/context/demo-app-context";
 import { repairStatusLabel, useRepairFlow } from "@/context/repair-flow-context";
 import { normalizePowerSource } from "@/services/vehicle-backend";
+import { ensureJobNotifications } from "@/services/push-notifications";
 
 const quickServices = [
   {
@@ -32,7 +34,7 @@ const quickServices = [
 
 export default function Home() {
   const router = useRouter();
-  const { backendEnabled, profile, signOut } = useAuth();
+  const { backendEnabled, user, profile, signOut } = useAuth();
   const { state: demoState, logout: demoLogout } = useDemoApp();
   const { state } = useRepairFlow();
   const displayName = profile?.full_name || demoState.user.name;
@@ -41,6 +43,15 @@ export default function Home() {
   const hasVehicle = state.vehicleSaved;
   const hasActiveRepair = !["idle", "cancelled", "completed"].includes(state.status);
   const vehiclePowerSource = normalizePowerSource(state.vehicle.powerSource);
+
+  useEffect(() => {
+    if (!backendEnabled || !user || profile?.role !== "motorist") return;
+    // Register the motorist's phone for the "rate your mechanic" prompt.
+    // In-app job status and rating remain available if push is denied.
+    void ensureJobNotifications(user.id).catch(() => {
+      // Notification opt-out or unavailable push services must not block the app.
+    });
+  }, [backendEnabled, user?.id, profile?.role]);
 
   const openVehicle = () => {
     if (hasVehicle) {
@@ -123,7 +134,7 @@ export default function Home() {
           onPress={openProblemFlow}
         >
           <Text style={styles.primaryButtonText}>
-            {hasActiveRepair ? "View active repair" : "Describe a car problem"}
+            {hasActiveRepair ? "View active connection" : "Describe a car problem"}
           </Text>
         </Pressable>
 
@@ -146,11 +157,11 @@ export default function Home() {
           ))}
         </View>
 
-        <Text style={styles.recentActivity}>{hasActiveRepair ? "Active repair" : "Recent activity"}</Text>
+        <Text style={styles.recentActivity}>{hasActiveRepair ? "Active connection" : "Recent activity"}</Text>
         <Pressable style={styles.activityContainer} onPress={() => router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/history")}>
           <Text style={styles.activity}>{state.requestId ? `Repair ${state.requestId}` : "Repair request"}</Text>
           <Text style={styles.activityStatus}>{repairStatusLabel(state.status)}</Text>
-          <Text style={styles.activityDetails}>{hasActiveRepair ? "View live repair" : "View jobs & history"}</Text>
+          <Text style={styles.activityDetails}>{hasActiveRepair ? "View service connection" : "View jobs & history"}</Text>
         </Pressable>
 
         <View style={styles.bottomNav}>
