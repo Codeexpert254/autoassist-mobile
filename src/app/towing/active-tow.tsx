@@ -76,7 +76,15 @@ export default function ActiveTowingJob(){
   },[id,profile?.role,gpsAllowed,Boolean(request)]));
   const stage=async(next:TowStatus)=>{
     if(!id||busy)return;setBusy(true);setError("");
-    try{\n      await updateTowStatus(id,next);\n      // The recovery agent has finished their work; the Motorist now confirms receipt.\n      if(next==="completed_by_agent"||next==="completed"){\n        router.replace("/towing/dashboard");\n        return;\n      }\n      await load();\n    }
+    try{
+      await updateTowStatus(id,next);
+      // Return agent home after delivery; customer still confirms receipt.
+      if(next==="completed_by_agent"||next==="completed"){
+        router.replace("/towing/dashboard");
+        return;
+      }
+      await load();
+    }
     catch(e){setError(e instanceof Error?e.message:"Unable to update towing status.");}
     finally{setBusy(false);}
   };
