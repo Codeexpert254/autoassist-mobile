@@ -14,6 +14,7 @@ const state = {
   section: "overview",
   role: null,
   verificationFilter: "pending",
+  verificationRole: "all",
   selectedVerification: null,
 };
 
@@ -153,7 +154,7 @@ async function navigate(section) {
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.section === section));
   const labels = {
     overview: "Overview",
-    verification: "Mechanic verification",
+    verification: "Provider verification",
     users: "Users",
     jobs: "Live repair jobs",
     orders: "Orders",
@@ -213,33 +214,197 @@ function info(label, value) {
   return `<div class="info-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
+
+const verificationRoles = [
+  ["all","All providers"],["mechanic","Mechanics"],
+  ["partsdealer","Parts Dealers"],["rider","Riders"],["towing","Towing Agents"],
+];
+const roleLabel = (role) => ({
+  mechanic:"Mechanic",partsdealer:"Parts Dealer",rider:"Rider",towing:"Towing Agent",
+})[role] ?? role;
+
 async function renderVerificationList() {
-  const data = await invoke("admin-verification", { action: "list", status: state.verificationFilter });
-  const items = data.items ?? [];
-  content.innerHTML = `
-    <div class="panel">
-      <div class="panel-header"><div><h3 class="panel-title">Mechanic applications</h3><p class="muted">Open an application to inspect private documents and make the review decision.</p></div>
-      <div class="toolbar">${["pending","approved","rejected","all"].map((item) => `<button class="filter-button ${state.verificationFilter===item?"active":""}" data-filter="${item}">${item}</button>`).join("")}</div></div>
-      <div class="list">${items.length ? items.map((item) => verificationCard(item)).join("") : `<div class="empty">No ${escapeHtml(state.verificationFilter)} applications.</div>`}</div>
-    </div>`;
-  content.querySelectorAll("[data-filter]").forEach((button) => button.addEventListener("click", () => {
-    state.verificationFilter = button.dataset.filter;
-    void renderVerificationList();
-  }));
-  content.querySelectorAll("[data-verification-id]").forEach((button) => button.addEventListener("click", () => void renderVerificationDetail(button.dataset.verificationId)));
+  if (!["super_admin","verification_admin"].includes(state.role)) {
+    return setError("Verification administrator access required.");
+  }
+  setLoading("Loading verification applications…");
+  try {
+    const data = await invoke("admin-verification", {
+      action:"list-all",role:state.verificationRole,status:state.verificationFilter,
+    });
+    const items=data.items??[];
+    content.innerHTML = `
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title">Provider verification</h3>
+            <p class="muted">Review mechanic, parts shop, rider and towing agent applications in one secure queue.</p>
+          </div>
+          <span class="status pending">${items.length} matching</span>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px" aria-label="Provider type">
+          ${verificationRoles.map(([value,label])=>`<button class="filter-button ${state.verificationRole===value?"active":""}" data-verification-role="${value}">${label}</button>`).join("")}
+        </div>
+        <div class="toolbar" style="margin-bottom:16px" aria-label="Verification status">
+          ${["pending","approved","rejected","all"].map(value=>`<button class="filter-button ${state.verificationFilter===value?"active":""}" data-verification-status="${value}">${value}</button>`).join("")}
+        </div>
+        <div class="list">
+          ${items.length?items.map(verificationCard).join(""):`<div class="empty">No ${escapeHtml(state.verificationFilter)} applications for this provider type.</div>`}
+        </div>
+      </div>`;
+    content.querySelectorAll("[data-verification-role]").forEach(button=>button.addEventListener("click",()=>{
+      state.verificationRole=button.dataset.verificationRole;
+      void renderVerificationList();
+    }));
+    content.querySelectorAll("[data-verification-status]").forEach(button=>button.addEventListener("click",()=>{
+      state.verificationFilter=button.dataset.verificationStatus;
+      void renderVerificationList();
+    }));
+    content.querySelectorAll("[data-provider-id]").forEach(button=>button.addEventListener("click",()=>{
+      void renderProviderVerificationDetail(button.dataset.providerId,button.dataset.providerRole);
+    }));
+  }catch(error){setError(error.message??"Unable to load verification applications.");}
 }
 
 function verificationCard(item) {
-  const profile = item.profile ?? {};
-  const provider = profile.provider_type === "garage" ? "Garage / business" : "Individual mechanic";
-  return `<button class="list-card clickable" data-verification-id="${escapeHtml(item.user_id)}" style="width:100%;text-align:left">
-    <div><div class="list-title">${escapeHtml(profile.full_name || item.mechanic?.garage_name || "Unnamed mechanic")}</div>
-    <div class="list-subtitle">${escapeHtml(provider)} • ${escapeHtml(item.mechanic?.location || "Location not provided")}<br>Submitted ${escapeHtml(formatDate(item.submitted_at))}</div></div>
+  return `<button class="list-card clickable" data-provider-id="${escapeHtml(item.id)}"
+      data-provider-role="${escapeHtml(item.role)}" style="width:100%;text-align:left">
+    <div>
+      <div class="list-title">${escapeHtml(item.displayName||"Unnamed provider")}</div>
+      <div class="list-subtitle">
+        <strong>${escapeHtml(roleLabel(item.role))}</strong> • ${escapeHtml(item.summary||"—")}
+        <br>Submitted ${escapeHtml(formatDate(item.createdAt))}
+      </div>
+    </div>
     <span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span>
   </button>`;
 }
 
-async function renderVerificationDetail(userId) {
+function providerInfoRows(role, record, profile) {
+  if (role==="partsdealer")return [
+    ["Shop / garage",record.shop_name],["Seller category",record.seller_kind],
+    ["Business registration / permit",record.business_reg_number],
+    ["Shop address",record.location_text],["Shop phone",record.phone],
+    ["Description",record.description],["Account holder",profile?.full_name],
+  ];
+  if (role==="rider")return [
+    ["Applicant",profile?.full_name],["Account phone",profile?.phone],
+    ["Rider phone",record.phone],["Vehicle type",record.vehicle_type],
+    ["Vehicle registration",record.registration_number],
+    ["Rider status",record.verification_status],
+  ];
+  return [
+    ["Business / operator",record.business_name],
+    ["Account holder",profile?.full_name],["Phone",record.phone],
+    ["Operating area",record.operating_area],["Tow truck type",record.vehicle_type],
+    ["Truck registration",record.vehicle_registration],
+    ["Operating licence",record.license_number],
+    ["Insurance policy",record.insurance_policy],
+  ];
+}
+
+async function renderProviderVerificationDetail(id,role) {
+  if(role==="mechanic")return renderMechanicVerificationDetail(id);
+  if(!["partsdealer","rider","towing"].includes(role)){
+    return setError("Unknown provider type.");
+  }
+  setLoading("Loading provider details…");
+  try {
+    const data=await invoke("admin-verification",{action:"detail-provider",id,role});
+    state.selectedVerification=data;
+    const record=data.record??{};
+    const pending=record.verification_status==="pending";
+    const proof=role==="towing";
+    const evidence=data.evidence??{};
+    const hasTowingDocuments=Boolean(evidence.licenseUrl&&evidence.insuranceUrl&&evidence.truckUrl);
+    const proofs=proof?[
+      ["Towing operating licence",evidence.licenseUrl],
+      ["Insurance certificate",evidence.insuranceUrl],
+      ["Tow-truck photograph",evidence.truckUrl],
+    ]:[];
+    const rows=providerInfoRows(role,record,data.profile??{});
+    content.innerHTML=`
+      <button id="back-to-verifications" class="back-link">← Back to verification queue</button>
+      <div class="detail-grid">
+        <div>
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">${escapeHtml(roleLabel(role))} application</h3>
+              <span class="status ${statusClass(record.verification_status)}">${escapeHtml(record.verification_status)}</span>
+            </div>
+            <div class="info-grid">
+              ${rows.map(([label,value])=>info(label,value||"—")).join("")}
+              ${info("Submitted",formatDate(record.submitted_at??record.created_at))}
+              ${record.review_note||record.verification_note?info("Previous review note",record.review_note??record.verification_note):""}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h3 class="panel-title">Verification evidence</h3>
+            ${proof?`<span class="muted">Private links expire in 5 minutes</span>`:""}</div>
+            ${proof?`<div class="document-grid">${proofs.map(([label,url])=>documentCard(label,url)).join("")}</div>`:
+             `<div class="notice warning"><strong>Independent document verification required.</strong><br>
+               This ${escapeHtml(roleLabel(role).toLowerCase())} registration currently provides business or vehicle details but no private identity-document upload.
+               Confirm the details through appropriate records before approving.</div>`}
+          </div>
+        </div>
+        <div class="panel">
+          <h3 class="panel-title">Admin review</h3>
+          <p class="muted">Check registration details and supporting evidence before changing account approval.</p>
+          ${proof&&!hasTowingDocuments?`<div class="notice warning">All three towing evidence images must be available before approval.</div>`:""}
+          <label class="check-row"><input id="check-provider-details" type="checkbox" />
+            <span>I verified the applicant's business, vehicle and contact details.</span></label>
+          <label class="check-row"><input id="check-provider-evidence" type="checkbox" />
+            <span>${proof
+              ?"I inspected the operating licence, insurance certificate and tow-truck photo."
+              :"I independently checked the registration information against reliable records."}</span></label>
+          <label>Review note<textarea id="review-note" placeholder="Required for rejection; explain what needs to change."></textarea></label>
+          <div class="action-row">
+            <button id="approve-provider" class="button primary" disabled>Approve ${escapeHtml(roleLabel(role))}</button>
+            <button id="reject-provider" class="button danger" ${!pending?"disabled":""}>Reject application</button>
+          </div>
+          <p id="review-error" class="error-text" hidden></p>
+        </div>
+      </div>`;
+    content.querySelector("#back-to-verifications").addEventListener("click",()=>void renderVerificationList());
+    const approveButton=content.querySelector("#approve-provider");
+    const updateApproval=()=>{
+      approveButton.disabled=!pending||(proof&&!hasTowingDocuments)
+        ||!content.querySelector("#check-provider-details").checked
+        ||!content.querySelector("#check-provider-evidence").checked;
+    };
+    content.querySelector("#check-provider-details").addEventListener("change",updateApproval);
+    content.querySelector("#check-provider-evidence").addEventListener("change",updateApproval);
+    approveButton.addEventListener("click",()=>void submitProviderReview(id,role,"approve"));
+    content.querySelector("#reject-provider").addEventListener("click",()=>void submitProviderReview(id,role,"reject"));
+    updateApproval();
+  }catch(error){setError(error.message??"Unable to load application.");}
+}
+
+async function submitProviderReview(id,role,decision){
+  const note=content.querySelector("#review-note").value.trim();
+  const errorEl=content.querySelector("#review-error");
+  errorEl.hidden=true;
+  if(decision==="reject"&&note.length<5){
+    errorEl.textContent="Enter a reason for rejection (at least five characters).";
+    errorEl.hidden=false;return;
+  }
+  if(!window.confirm(`Confirm ${decision} for this ${roleLabel(role).toLowerCase()} application?`))return;
+  const buttons=content.querySelectorAll("#approve-provider,#reject-provider");
+  buttons.forEach(button=>{button.disabled=true;});
+  try{
+    await invoke("admin-verification",{action:"review-provider",role,id,decision,note});
+    await renderProviderVerificationDetail(id,role);
+  }catch(error){
+    errorEl.textContent=error.message??"Unable to record review.";
+    errorEl.hidden=false;
+    buttons.forEach(button=>{button.disabled=false;});
+    const approved=content.querySelector("#approve-provider");
+    approved.disabled=!content.querySelector("#check-provider-details").checked ||
+      !content.querySelector("#check-provider-evidence").checked;
+  }
+}
+
+async function renderMechanicVerificationDetail(userId) {
   setLoading("Loading private verification evidence…");
   try {
     const data = await invoke("admin-verification", { action: "detail", userId });
@@ -298,6 +463,7 @@ async function renderVerificationDetail(userId) {
     document.querySelector("#reject-button").addEventListener("click", () => void submitReview(userId, "reject"));
   } catch (error) { setError(error.message); }
 }
+
 
 function documentCard(label, url) {
   if (!url) return `<div class="document-card"><div style="height:230px;display:grid;place-items:center;color:#667085">No document available</div><div>${escapeHtml(label)}</div></div>`;
