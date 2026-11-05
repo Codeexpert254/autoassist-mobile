@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
-import { useRepairFlow } from "@/context/repair-flow-context";
+import { PartsLocationPicker, type PartsCoordinate, validPartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Field, Notice, PartsPage, Section, partStyles, BLUE, NAVY } from "@/components/parts-ui";
 import { type Part, imageUrl, money, partDetails } from "@/services/parts-data";
 import { orderPart } from "@/services/parts-orders";
@@ -15,6 +15,7 @@ export default function PartsCheckout() {
   const {user,profile}=useAuth();
   const [part,setPart]=useState<Part|null>(null),[qty,setQty]=useState(1);
   const [location,setLocation]=useState(""),[phone,setPhone]=useState(profile?.phone??"");
+  const [deliveryPin,setDeliveryPin]=useState<PartsCoordinate|null>(null);
   const [note,setNote]=useState(""),[repairId,setRepairId]=useState<string|null>(null);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -24,10 +25,13 @@ export default function PartsCheckout() {
       try{
         const p=await partDetails(partId);setPart(p);
         const {data}=await requireSupabase().from("repair_requests")
-          .select("id,location_text,status").eq("motorist_id",user.id)
+          .select("id,location_text,latitude,longitude,status").eq("motorist_id",user.id)
           .in("status",["connected","en-route","arrived","repair-complete"])
           .order("created_at",{ascending:false}).limit(1).maybeSingle();
-        if(data){setRepairId(data.id);setLocation(data.location_text);}
+        if(data){
+          setRepairId(data.id);setLocation(data.location_text);
+          setDeliveryPin(validPartsCoordinate(data.latitude,data.longitude));
+        }
       }catch(e){setError(e instanceof Error?e.message:"Unable to load this part.");}
       finally{setLoading(false);}
     })();
@@ -37,7 +41,7 @@ export default function PartsCheckout() {
     if(location.trim().length<5||phone.trim().length<9){setError("Enter a valid delivery address and phone number.");return;}
     setBusy(true);setError("");
     try{
-      const id=await orderPart(part.id,qty,location.trim(),phone.trim(),repairId,note.trim());
+      const id=await orderPart(part.id,qty,location.trim(),phone.trim(),repairId,note.trim(),deliveryPin);
       router.replace({pathname:"/motorist/parts-order",params:{orderId:id}});
     }catch(e){setError(e instanceof Error?e.message:"Unable to place order.");}
     finally{setBusy(false);}
@@ -70,8 +74,15 @@ export default function PartsCheckout() {
       </Section>
       <Section title="Delivery details">
         {repairId?<Notice>The order will be linked to your active mechanic repair request.</Notice>:null}
-        <Field label="Delivery address" value={location} onChangeText={setLocation}
+        <Notice>Choose your current position or tap the map to set an accurate delivery pin. You can also type an address if GPS is unavailable.</Notice>
+        <PartsLocationPicker value={deliveryPin} title="Where should the rider deliver?"
+          help="Share your exact delivery point only for this order."
+          onPick={(point,label)=>{setDeliveryPin(point);setLocation(label);}}/>
+        <Field label="Delivery address / landmark" value={location}
+          onChangeText={(value)=>{setLocation(value);setDeliveryPin(null);}}
           placeholder="Building, street, town, landmark"/>
+        {deliveryPin?<Notice tone="success">Delivery GPS pin saved for the rider.</Notice>:
+          <Notice>This is a text-only address. Add a pin so the rider can navigate accurately inside AutoAssist.</Notice>}
         <Field label="Contact phone" value={phone} onChangeText={setPhone}
           keyboardType="phone-pad" placeholder="+254 7..."/>
         <Field label="Message to dealer / rider (optional)" value={note} multiline onChangeText={setNote}
