@@ -55,6 +55,10 @@ export default function TowingOfferPage(){
       <View style={styles.card}>
         <Text style={styles.label}>PICKUP AREA</Text>
         <Text style={styles.address}>{offer.pickup_area}</Text>
+        <Text style={[styles.label,{marginTop:18}]}>TOWING DESTINATION</Text>
+        <Text style={styles.address}>{offer.destination_area}</Text>
+        {offer.issue_notes?<><Text style={[styles.label,{marginTop:18}]}>ROAD CONDITION / ISSUE</Text>
+          <Text style={styles.address}>{offer.issue_notes}</Text></>:null}
         <Text style={[styles.label,{marginTop:18}]}>CUSTOMER'S INDICATIVE RANGE</Text>
         <Text style={styles.price}>{offer.estimate_low_kes!=null&&offer.estimate_high_kes!=null?
           `${towMoney(offer.estimate_low_kes)} – ${towMoney(offer.estimate_high_kes).replace("KES ","")}`:"Long distance · custom quote"}</Text>
