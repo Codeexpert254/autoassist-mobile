@@ -7,6 +7,10 @@ import { type PartsCoordinate } from "@/components/parts-location-picker";
 import { BLUE, NAVY } from "@/components/parts-ui";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+// The OSRM demo is used only during local development. Production should
+// supply its own routing backend via EXPO_PUBLIC_PARTS_ROUTING_URL.
+const ROUTING_URL = process.env.EXPO_PUBLIC_PARTS_ROUTING_URL?.trim() ||
+  (__DEV__ ? "https://router.project-osrm.org" : "");
 
 function directDistance(a: PartsCoordinate,b: PartsCoordinate):number {
   const rad = Math.PI/180;
@@ -38,6 +42,11 @@ export function PartsTripGuide({
   const [ready,setReady]=useState(false);
   const [mapError,setMapError]=useState("");
   const [openError,setOpenError]=useState("");
+  const [roadRoute,setRoadRoute]=useState<{
+    coordinates:number[][];distanceKm:number;durationMin:number;
+  }|null>(null);
+  const lastPosition=useRef(ownPosition);
+  lastPosition.current=ownPosition;
   const lastFit=useRef("");
   const focus=useCallback(()=>{
     if(!ready||(!destination&&!ownPosition))return;
@@ -58,13 +67,47 @@ export function PartsTripGuide({
     lastFit.current=key;focus();
   },[ready,destination?.latitude,destination?.longitude,ownPosition?.latitude!=null,focus]);
 
+  useEffect(()=>{
+    if(mode!=="rider"||!destination||!ownPosition||!ROUTING_URL)return;
+    let disposed=false;
+    const loadRoadRoute=async()=>{
+      const from=lastPosition.current;
+      if(!from||directDistance(from,destination)>120)return;
+      const ctrl=new AbortController();
+      const timeout=setTimeout(()=>ctrl.abort(),8500);
+      try{
+        const origin=`${from.longitude},${from.latitude}`;
+        const end=`${destination.longitude},${destination.latitude}`;
+        const url=ROUTING_URL.replace(/\\/$/,"")+
+          `/route/v1/driving/${origin};${end}?overview=full&geometries=geojson&steps=false`;
+        const response=await fetch(url,{signal:ctrl.signal});
+        if(!response.ok)throw new Error("Routing provider is unavailable");
+        const json=await response.json();
+        const first=json.routes?.[0];
+        if(!disposed&&first?.geometry?.coordinates?.length>1){
+          setRoadRoute({
+            coordinates:first.geometry.coordinates as number[][],
+            distanceKm:Number(first.distance)/1000,
+            durationMin:Number(first.duration)/60,
+          });
+        }
+      }catch{
+        if(!disposed)setRoadRoute(null);
+      }finally{clearTimeout(timeout);}
+    };
+    void loadRoadRoute();
+    const timer=setInterval(()=>void loadRoadRoute(),90000);
+    return()=>{disposed=true;clearInterval(timer);};
+  },[mode,destination?.latitude,destination?.longitude,Boolean(ownPosition)]);
   const distance=destination&&ownPosition?directDistance(ownPosition,destination):null;
   const start=destination??ownPosition;
 
   return <View style={styles.shell}>
     <View style={styles.heading}>
       <Text style={styles.headingTitle}>{mode==="rider"?"Your route":"Rider's journey"}</Text>
-      {distance!==null?<Text style={styles.distance}>
+      {roadRoute?<Text style={styles.distance}>
+        {roadRoute.distanceKm.toFixed(1)} km by road
+      </Text>:distance!==null?<Text style={styles.distance}>
         {distance<1?`${Math.round(distance*1000)} m`:`${distance.toFixed(1)} km`} direct
       </Text>:null}
     </View>
@@ -90,13 +133,14 @@ export function PartsTripGuide({
           </View>
         </Marker>:null}
         {destination&&ownPosition?<GeoJSONSource id="part-trip-line" data={{
-          type:"Feature",geometry:{type:"LineString",coordinates:[
+          type:"Feature",geometry:{type:"LineString",coordinates:roadRoute?.coordinates??[
             [ownPosition.longitude,ownPosition.latitude],
             [destination.longitude,destination.latitude],
           ]},properties:{},
         }}>
-          <Layer id="part-trip-direct-line" source="part-trip-line" type="line" paint={{
-            "line-color":BLUE,"line-width":3,"line-dasharray":[2,2],"line-opacity":0.8,
+          <Layer id="part-trip-route-line" source="part-trip-line" type="line" paint={{
+            "line-color":BLUE,"line-width":roadRoute?5:3,
+            "line-dasharray":roadRoute?[1,0]:[2,2],"line-opacity":0.85,
           }}/>
         </GeoJSONSource>:null}
       </Map>
@@ -108,8 +152,12 @@ export function PartsTripGuide({
     </View>:<View style={styles.mapFallback}>
       <Text style={styles.mapFallbackText}>Waiting for a GPS position to display your map.</Text>
     </View>}
-    {destination&&ownPosition?<Text style={styles.helper}>
-      Dashed line shows direct distance, not a road route or arrival estimate.
+    {roadRoute?<Text style={styles.helper}>
+      Estimated road travel: about {Math.ceil(roadRoute.durationMin)} min without live traffic.
+      The line shows a mapped driving route, but does not provide spoken directions.
+    </Text>:destination&&ownPosition?<Text style={styles.helper}>
+      Dashed line shows direct distance only, not a road route or arrival estimate.
+      Tap the navigation button for turn-by-turn directions.
     </Text>:null}
     {!destination?<Text style={styles.helper}>
       This destination has no saved GPS pin. Ask the dealer or customer to save their precise location. You can still navigate using the written address.
