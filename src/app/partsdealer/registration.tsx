@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
+import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Field, Notice, PartsPage, Section } from "@/components/parts-ui";
 import { applyForShop, ownShop } from "@/services/parts-data";
 
@@ -12,6 +13,7 @@ export default function PartsDealerRegistration() {
   const [phone,setPhone]=useState(profile?.phone??"");
   const [location,setLocation]=useState("");
   const [description,setDescription]=useState("");
+  const [pickupPin,setPickupPin]=useState<PartsCoordinate|null>(null);
   const [registration,setRegistration]=useState("");
   const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -32,6 +34,7 @@ export default function PartsDealerRegistration() {
     try{
       await applyForShop(user.id,{
         shop_name:name.trim(),phone:phone.trim(),location_text:location.trim(),
+        latitude:pickupPin?.latitude??null,longitude:pickupPin?.longitude??null,
         description:description.trim(),business_reg_number:registration.trim(),
       });
       router.replace("/partsdealer/dashboard");
@@ -51,7 +54,12 @@ export default function PartsDealerRegistration() {
         <Field label="Shop or garage name" value={name} onChangeText={setName} placeholder="Example: Auto Parts Nairobi"/>
         <Field label="Business registration / permit number" value={registration} onChangeText={setRegistration} placeholder="Registered business identifier"/>
         <Field label="Shop phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+254 7..."/>
-        <Field label="Physical shop address" value={location} onChangeText={setLocation} placeholder="Street, building, town or county"/>
+        <Field label="Physical shop address" value={location}
+          onChangeText={(value)=>{setLocation(value);setPickupPin(null);}}
+          placeholder="Street, building, town or county"/>
+        <PartsLocationPicker title="Set shop pickup pin" value={pickupPin}
+          help="If you are at your shop, use current GPS. Otherwise choose its precise position on the map."
+          onPick={(point,label)=>{setPickupPin(point);setLocation(label);}}/>
         <Field label="About your shop (optional)" value={description} onChangeText={setDescription} multiline
           placeholder="What parts do you specialize in?"/>
       </Section>
