@@ -88,7 +88,9 @@ export default function MotoristPartsOrder(){
         </Text>
         <Text style={partStyles.cardText}>Delivery destination: {order.delivery_location}</Text>
       </View>
-      <Notice>{help[order.status]||"Your order status is updating."}</Notice>
+      <Notice>{order.status==="rider_assigned"&&order.arrived_at_dealer_at
+        ?"Your rider has arrived at the Parts Dealer and is collecting the item."
+        :help[order.status]||"Your order status is updating."}</Notice>
       {order.status==="picked_up"?<>
         {order.delivery_started_at?<Notice tone="success">
           Your rider has started the journey to you. The map refreshes while the Rider keeps the AutoAssist trip screen open.
