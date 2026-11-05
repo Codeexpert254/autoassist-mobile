@@ -3,6 +3,7 @@ const t=(table:string)=>requireSupabase().from(table as never) as any;
 export type RiderProfile={
   user_id:string;vehicle_type:"motorbike"|"bicycle"|"car";registration_number:string;phone:string;
   verified:boolean;is_available:boolean;rating:number;reviews_count:number;completed_deliveries:number;
+  verification_status:"pending"|"approved"|"rejected";verification_note:string|null;
 };
 export type DeliveryLead={offer_id:string;order_id:string;part_title:string;shop_name:string;
   pickup_location:string;listed_at:string;expires_at:string;score:number};

@@ -77,6 +77,16 @@ export default function PartsDealerDashboard() {
     catch(e){setError(e instanceof Error?e.message:"Unable to change shop availability.");}
     finally{setBusy(false);}
   };
+  const resubmitShop=async()=>{
+    if(!shop||busy)return;setBusy(true);setError("");
+    try{
+      const {error:reviewError}=await (await import("@/lib/supabase")).requireSupabase()
+        .rpc("resubmit_parts_shop_application" as never,{p_shop_id:shop.id} as never);
+      if(reviewError)throw reviewError;
+      await load();
+    }catch(e){setError(e instanceof Error?e.message:"Unable to resubmit shop.");}
+    finally{setBusy(false);}
+  };
   const pending=orders.filter(x=>x.status==="pending_dealer");
   const ready=orders.filter(x=>["accepted","ready_for_pickup","rider_assigned","picked_up"].includes(x.status));
   const confirmed=orders.filter(x=>x.status==="delivered");
@@ -98,7 +108,13 @@ export default function PartsDealerDashboard() {
           </View>
           <Status label={shop.verification_status} good={shop.verification_status==="approved"}/>
         </View>
-        {shop.verification_status==="rejected"?<Notice tone="error">{shop.verification_note||"Your application needs review."}</Notice>:null}
+        {shop.verification_status==="rejected"?<>
+          <Notice tone="error">{shop.verification_note||"Your shop application needs corrections."}</Notice>
+          <Action label="Update shop details" variant="outline"
+            onPress={()=>router.push("/partsdealer/store-profile")}/>
+          <Action label="Resubmit for verification" busy={busy}
+            onPress={()=>void resubmitShop()}/>
+        </>:null}
         {shop.verification_status==="pending"?<Notice>
           Your shop is awaiting administrator approval. You can upload your inventory now, but listings will not be shown to buyers until verification.
         </Notice>:null}

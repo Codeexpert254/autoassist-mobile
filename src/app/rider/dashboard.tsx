@@ -42,7 +42,7 @@ export default function RiderDashboard(){
       <View style={partStyles.card}>
         <View style={[partStyles.row,{justifyContent:"space-between"}]}>
           <Text style={partStyles.cardTitle}>Delivery account</Text>
-          <Status label={rider.verified?"Approved":"Verification pending"} good={rider.verified}/>
+          <Status label={rider.verification_status==="rejected"?"Rejected":rider.verified?"Approved":"Verification pending"} good={rider.verified}/>
         </View>
         <Text style={partStyles.cardText}>{rider.vehicle_type} · {rider.registration_number||"No plate required"}</Text>
         {rider.verified?<View style={[partStyles.row,{justifyContent:"space-between",marginTop:14}]}>
@@ -52,7 +52,11 @@ export default function RiderDashboard(){
           </View>
           <Switch value={rider.is_available} onValueChange={v=>void online(v)} disabled={busy}
             trackColor={{true:"#A5C8F5",false:"#D0D5DD"}} thumbColor={rider.is_available?BLUE:"#FFFFFF"}/>
-        </View>:<Notice>AutoAssist will activate delivery requests after your rider profile is approved.</Notice>}
+        </View>:rider.verification_status==="rejected"?<>
+          <Notice tone="error">{rider.verification_note||"Your rider application was rejected."}</Notice>
+          <Action label="Correct and resubmit rider application" variant="outline"
+            onPress={()=>router.push("/rider/registration")}/>
+        </>:<Notice>AutoAssist will activate delivery requests after your rider profile is approved.</Notice>}
       </View>
       <Section title="My active deliveries">
         {!active.length?<Notice>No active deliveries at the moment.</Notice>:active.map(o=>
