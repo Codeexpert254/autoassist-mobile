@@ -18,7 +18,8 @@ export type TowRequest = {
 };
 export type TowOffer = {
   offer_id:string;request_id:string;vehicle_class:VehicleCategory;
-  vehicle_registration:string;pickup_area:string;expires_at:string;
+  vehicle_registration:string;pickup_area:string;destination_area:string;issue_notes:string;
+  expires_at:string;
   estimate_low_kes:number|null;estimate_high_kes:number|null;
 };
 export type TowingPresence = {agent_id:string;is_online:boolean;updated_at:string};
