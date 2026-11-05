@@ -164,7 +164,8 @@ export default function TowingDashboard(){
           <View style={styles.jobHead}><Text style={styles.newLabel}>NEW REQUEST</Text>
             <Icon ios="arrow.up.right" android="arrow_forward"/></View>
           <Text style={styles.jobTitle}>{offer.vehicle_registration} · {offer.vehicle_class}</Text>
-          <Text style={styles.jobDesc}>{offer.pickup_area}</Text>
+          <Text style={styles.jobDesc}>From: {offer.pickup_area}</Text>
+          <Text style={styles.jobDesc}>To: {offer.destination_area}</Text>
           <Text style={styles.link}>Review and quote →</Text>
         </Pressable>)}
       </View>
