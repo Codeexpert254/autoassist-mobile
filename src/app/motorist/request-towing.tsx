@@ -15,7 +15,7 @@ import {
 const vehicleChoices:VehicleCategory[]=["saloon","suv","light_truck"];
 const bandChoices:TowDistanceBand[]=["0_10","10_20","20_30","30_40","40_50","above_50"];
 export default function RequestTowing(){
- const router=useRouter(),{user,profile}=useAuth();
+ const router=useRouter(),{user,profile,backendEnabled,loading:authLoading}=useAuth();
  const [pickup,setPickup]=useState<PartsCoordinate|null>(null),[pickupText,setPickupText]=useState("");
  const [destination,setDestination]=useState<PartsCoordinate|null>(null),[destinationText,setDestinationText]=useState("");
  const [vehicle,setVehicle]=useState<VehicleCategory>("saloon"),[band,setBand]=useState<TowDistanceBand>("0_10");
@@ -51,7 +51,10 @@ export default function RequestTowing(){
  };
  return <PartsPage title="Request towing" subtitle="Verified recovery when you need it"
    back="/motorist/home">
-   {profile?.role!=="motorist"?<Notice tone="error">Sign in as a Motorist to request towing.</Notice>:<>
+   {!backendEnabled?<Notice tone="error">Towing requests require a live AutoAssist account. This build is in Developer Preview mode because the Supabase environment variables are missing. Configure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY, restart Expo, then log in as a Motorist.</Notice>:
+    authLoading?<Notice>Checking your AutoAssist account…</Notice>:
+    !user?<Notice tone="error">Your live session is not active. Please log out and sign in with your Motorist account.</Notice>:
+    profile?.role!=="motorist"?<Notice tone="error">This account is not registered as a Motorist. Sign in with a Motorist account to request towing.</Notice>:<>
      <View style={styles.hero}>
        <View style={styles.roundIcon}>
          <SymbolView name={{ios:"car.side.rear.open",android:"local_shipping",web:"local_shipping"} as never}
