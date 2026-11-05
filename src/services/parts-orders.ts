@@ -39,15 +39,12 @@ export async function readyForRider(id:string) {
     return {state:"dispatch_unavailable"};
   }
 }
-export async function respondToRiderOffer(offerId:string,orderId:string,accept:boolean) {
-  const outcome=await rpc("respond_parts_delivery_offer",{
+export async function respondToRiderOffer(offerId:string,_orderId:string,accept:boolean) {
+  // A rider can decline an offer but is not authorized to dispatch
+  // the order to another rider. The dealer can Retry after a decline.
+  return rpc("respond_parts_delivery_offer",{
     p_offer_id:offerId,p_accept:accept,
   });
-  if(!accept||outcome==="expired") {
-    try { await requestRiderDispatch(orderId); }
-    catch(error) { console.warn("Could not offer delivery to next rider",error); }
-  }
-  return outcome;
 }
 export const riderPickedUp=(id:string)=>
   rpc("mark_parts_picked_up",{p_order_id:id});
