@@ -24,7 +24,12 @@ export type PartOrder = {
 };
 const client = () => requireSupabase();
 const t = (name: string) => client().from(name as never) as any;
-const check = (error: any) => { if (error) throw error; };
+const check = (error: any) => {
+  if (!error) return;
+  const message=typeof error?.message==="string" ? error.message : "Marketplace request failed.";
+  const code=typeof error?.code==="string" ? " ("+error.code+")" : "";
+  throw new Error(message+code);
+};
 export const money = (n: number | string) => "KES " + Number(n || 0).toLocaleString("en-KE");
 export const conditions: Part["part_condition"][] = ["New", "Refurbished", "Used"];
 export const partCategories = ["Brakes","Engine","Electrical","Suspension","Transmission",

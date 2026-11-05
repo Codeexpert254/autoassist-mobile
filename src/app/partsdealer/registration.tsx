@@ -35,7 +35,12 @@ export default function PartsDealerRegistration() {
         description:description.trim(),business_reg_number:registration.trim(),
       });
       router.replace("/partsdealer/dashboard");
-    }catch(e){setError(e instanceof Error?e.message:"Unable to register your shop.");}
+    }catch(e){
+      const message=e instanceof Error?e.message:
+        e && typeof e==="object" && "message" in e
+          ? String((e as {message:unknown}).message) : "Unable to register your shop.";
+      setError(message);
+    }
     finally{setBusy(false);}
   };
   return <PartsPage title="Register your parts shop" subtitle="One verified shop per seller account"
