@@ -20,7 +20,7 @@ export type PartOrder = {
   repair_request_id: string | null; quantity: number; unit_price_kes: number; subtotal_kes: number;
   commission_percent: number; commission_kes: number; delivery_location: string;
   delivery_latitude: number | null; delivery_longitude: number | null;
-  delivery_started_at: string | null; rider_latitude: number | null;
+  delivery_started_at: string | null; arrived_at_dealer_at: string | null; rider_latitude: number | null;
   rider_longitude: number | null; rider_location_updated_at: string | null;
   delivery_phone: string; note: string; status: string; decline_reason: string | null;
   payment_method: string; payment_status: string; commission_status: string; created_at: string;
