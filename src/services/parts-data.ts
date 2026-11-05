@@ -2,6 +2,7 @@ import { requireSupabase } from "@/lib/supabase";
 
 export type PartsShop = {
   id: string; owner_id: string; shop_name: string; phone: string; location_text: string;
+  latitude: number | null; longitude: number | null;
   description: string; business_reg_number: string | null; seller_kind: "partsdealer" | "garage";
   verification_status: "pending" | "approved" | "rejected";
   verification_note: string | null; is_open: boolean;
@@ -18,6 +19,9 @@ export type PartOrder = {
   id: string; motorist_id: string; shop_id: string; part_id: string; rider_id: string | null;
   repair_request_id: string | null; quantity: number; unit_price_kes: number; subtotal_kes: number;
   commission_percent: number; commission_kes: number; delivery_location: string;
+  delivery_latitude: number | null; delivery_longitude: number | null;
+  delivery_started_at: string | null; rider_latitude: number | null;
+  rider_longitude: number | null; rider_location_updated_at: string | null;
   delivery_phone: string; note: string; status: string; decline_reason: string | null;
   payment_method: string; payment_status: string; commission_status: string; created_at: string;
   parts_inventory?: Part; parts_shops?: PartsShop;
@@ -44,12 +48,13 @@ export async function ownShop(userId: string): Promise<PartsShop | null> {
 export async function applyForShop(userId: string, fields: {
   shop_name: string; phone: string; location_text: string;
   description: string; business_reg_number: string;
+  latitude?: number | null; longitude?: number | null;
 }): Promise<PartsShop> {
   const { data, error } = await t("parts_shops").insert({ owner_id: userId, ...fields }).select("*").single();
   check(error); return data;
 }
 export async function updateShop(id: string, fields: Partial<Pick<PartsShop,
- "shop_name" | "phone" | "location_text" | "description" | "business_reg_number" | "is_open">>):
+ "shop_name" | "phone" | "location_text" | "latitude" | "longitude" | "description" | "business_reg_number" | "is_open">>):
  Promise<PartsShop> {
   const { data, error } = await t("parts_shops").update(fields).eq("id",id).select("*").single();
   check(error);return data;
@@ -77,7 +82,7 @@ export async function changeStock(partId: string,qty: number) {
 }
 export async function findParts(search="",condition="All"): Promise<Part[]> {
   let query=t("parts_inventory").select(
-    "*,parts_shops(id,shop_name,owner_id,phone,location_text,rating,reviews_count,verification_status,is_open),parts_inventory_images(*)"
+    "*,parts_shops(id,shop_name,owner_id,phone,location_text,latitude,longitude,rating,reviews_count,verification_status,is_open),parts_inventory_images(*)"
   ).eq("is_listed",true).gt("stock_quantity",0).limit(150);
   if(search.trim())query=query.ilike("title","%"+search.trim().slice(0,75)+"%");
   if(condition!=="All")query=query.eq("part_condition",condition);
@@ -91,24 +96,24 @@ export async function findParts(search="",condition="All"): Promise<Part[]> {
 }
 export async function partDetails(id:string): Promise<Part> {
   const {data,error}=await t("parts_inventory").select(
-    "*,parts_shops(id,shop_name,owner_id,phone,location_text,rating,reviews_count,verification_status,is_open),parts_inventory_images(*)"
+    "*,parts_shops(id,shop_name,owner_id,phone,location_text,latitude,longitude,rating,reviews_count,verification_status,is_open),parts_inventory_images(*)"
   ).eq("id",id).single();check(error);
   if(data?.parts_shops?.verification_status!=="approved")throw new Error("This seller is not approved.");
   return data;
 }
 export async function shopOrders(shopId:string): Promise<PartOrder[]> {
   const {data,error}=await t("parts_orders").select(
-    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,owner_id)"
+    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,latitude,longitude,owner_id)"
   ).eq("shop_id",shopId).order("created_at",{ascending:false});check(error);return data??[];
 }
 export async function buyerOrders(userId:string): Promise<PartOrder[]> {
   const {data,error}=await t("parts_orders").select(
-    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,owner_id)"
+    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,latitude,longitude,owner_id)"
   ).eq("motorist_id",userId).order("created_at",{ascending:false});check(error);return data??[];
 }
 export async function oneOrder(id:string): Promise<PartOrder> {
   const {data,error}=await t("parts_orders").select(
-    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,owner_id)"
+    "*,parts_inventory(title,part_condition,price_kes),parts_shops(shop_name,phone,location_text,latitude,longitude,owner_id)"
   ).eq("id",id).single();check(error);return data;
 }
 export function subscribeShopOrders(shopId:string,onChange:()=>void) {
