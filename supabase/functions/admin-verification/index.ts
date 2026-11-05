@@ -61,6 +61,134 @@ Deno.serve(async (req) => {
     return json({ error: "Verification admin access required" }, 403);
   }
 
+
+  // Shared verification queue for the four provider types. Existing mechanic
+  // actions (list/detail/review) remain unchanged for older admin clients.
+  if (action === "list-all") {
+    const allowedRoles = new Set(["all", "mechanic", "partsdealer", "rider", "towing"]);
+    const allowedStatuses = new Set(["all", "pending", "approved", "rejected", "draft"]);
+    const roleFilter = String(body.role ?? "all");
+    const statusFilter = String(body.status ?? "pending");
+    if (!allowedRoles.has(roleFilter) || !allowedStatuses.has(statusFilter))
+      return json({ error: "Invalid verification filter" }, 400);
+
+    const [mech, shops, riders, towing] = await Promise.all([
+      service.from("mechanic_verification_submissions")
+        .select("user_id,status,submitted_at,review_note").order("submitted_at",{ascending:false}).limit(200),
+      service.from("parts_shops")
+        .select("id,owner_id,shop_name,location_text,seller_kind,verification_status,created_at,verification_note")
+        .order("created_at",{ascending:false}).limit(200),
+      service.from("parts_rider_profiles")
+        .select("user_id,vehicle_type,registration_number,verification_status,verification_note,created_at")
+        .order("created_at",{ascending:false}).limit(200),
+      service.from("towing_agent_profiles")
+        .select("user_id,business_name,vehicle_type,vehicle_registration,operating_area,verification_status,review_note,submitted_at")
+        .order("submitted_at",{ascending:false}).limit(200),
+    ]);
+    const problem = mech.error || shops.error || riders.error || towing.error;
+    if (problem) return json({ error: "Unable to load verification applications" }, 500);
+    const ids = Array.from(new Set([
+      ...(mech.data ?? []).map(x=>x.user_id),
+      ...(shops.data ?? []).map(x=>x.owner_id),
+      ...(riders.data ?? []).map(x=>x.user_id),
+      ...(towing.data ?? []).map(x=>x.user_id),
+    ]));
+    const profileResult = ids.length
+      ? await service.from("profiles").select("id,full_name,phone,role,provider_type").in("id",ids)
+      : {data:[],error:null};
+    if (profileResult.error) return json({error:"Unable to load applicant accounts"},500);
+    const profileMap = new Map((profileResult.data ?? []).map(x=>[x.id,x]));
+    const items = [
+      ...(mech.data ?? []).map(x=>({
+        id:x.user_id,role:"mechanic",ownerId:x.user_id,status:x.status,
+        createdAt:x.submitted_at,displayName:profileMap.get(x.user_id)?.full_name??"Mechanic",
+        summary:profileMap.get(x.user_id)?.provider_type==="garage"?"Garage / business":"Individual mechanic",
+        reviewNote:x.review_note??null,
+      })),
+      ...(shops.data ?? []).map(x=>({
+        id:x.id,role:"partsdealer",ownerId:x.owner_id,status:x.verification_status,
+        createdAt:x.created_at,displayName:x.shop_name,
+        summary:(x.seller_kind==="garage"?"Garage seller":"Parts shop")+" · "+x.location_text,
+        reviewNote:x.verification_note??null,
+      })),
+      ...(riders.data ?? []).map(x=>({
+        id:x.user_id,role:"rider",ownerId:x.user_id,status:x.verification_status,
+        createdAt:x.created_at,displayName:profileMap.get(x.user_id)?.full_name??"Rider",
+        summary:x.vehicle_type+" · "+x.registration_number,
+        reviewNote:x.verification_note??null,
+      })),
+      ...(towing.data ?? []).map(x=>({
+        id:x.user_id,role:"towing",ownerId:x.user_id,status:x.verification_status,
+        createdAt:x.submitted_at,displayName:x.business_name,
+        summary:x.vehicle_type+" · "+x.vehicle_registration+" · "+x.operating_area,
+        reviewNote:x.review_note??null,
+      })),
+    ].filter(x=>(roleFilter==="all"||x.role===roleFilter)
+      &&(statusFilter==="all"||x.status===statusFilter))
+      .sort((a,b)=>String(b.createdAt??"").localeCompare(String(a.createdAt??"")));
+    return json({items});
+  }
+
+  if (action === "detail-provider") {
+    const role = String(body.role??"");
+    const id = String(body.id??"");
+    if (!["partsdealer","rider","towing"].includes(role) ||
+      !/^[0-9a-f-]{36}$/i.test(id)) return json({error:"Invalid applicant"},400);
+    const table = role==="partsdealer"?"parts_shops":
+      role==="rider"?"parts_rider_profiles":"towing_agent_profiles";
+    const key = role==="partsdealer"?"id":"user_id";
+    const {data:record,error:lookupError}=await service.from(table).select("*").eq(key,id).maybeSingle();
+    if (lookupError) return json({error:"Unable to load applicant"},500);
+    if (!record) return json({error:"Applicant not found"},404);
+    const ownerId=role==="partsdealer"?record.owner_id:record.user_id;
+    const {data:profile}=await service.from("profiles")
+      .select("id,full_name,phone,role,provider_type,created_at").eq("id",ownerId).maybeSingle();
+    const evidence:Record<string,string|null>={};
+    if(role==="towing"){
+      for(const [label,path] of [
+        ["licenseUrl",record.license_image_path],
+        ["insuranceUrl",record.insurance_image_path],
+        ["truckUrl",record.truck_image_path],
+      ]){
+        if(!path){evidence[label]=null;continue;}
+        // Never generate signed links outside this applicant's private folder.
+        if(!String(path).startsWith(ownerId+"/")){evidence[label]=null;continue;}
+        const signed=await service.storage.from("towing-verification")
+          .createSignedUrl(String(path),300);
+        evidence[label]=signed.error?null:(signed.data?.signedUrl??null);
+      }
+    }
+    return json({role,record,profile,evidence,expiresInSeconds:300});
+  }
+
+  if (action === "review-provider") {
+    const role=String(body.role??"");
+    const id=String(body.id??"");
+    const decision=String(body.decision??"");
+    const note=typeof body.note==="string"?body.note.trim():"";
+    if(!["mechanic","partsdealer","rider","towing"].includes(role) ||
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      !["approve","reject"].includes(decision))
+      return json({error:"Invalid verification decision"},400);
+    if(decision==="reject"&&note.length<5)
+      return json({error:"Provide a reason for rejection (at least 5 characters)"},400);
+    if(role==="mechanic"){
+      const {data,error}=await service.rpc("review_mechanic_verification",{
+        p_reviewer_user_id:reviewerId,p_subject_user_id:id,p_decision:decision,p_note:note,
+      });
+      return error?json({error:error.message},400):json({ok:true,result:data});
+    }
+    // The caller JWT is required for SQL review functions to audit auth.uid().
+    const approve=decision==="approve";
+    const target = role==="partsdealer"
+      ? {fn:"review_parts_shop_application",args:{p_shop_id:id,p_approve:approve,p_note:note}}
+      : role==="rider"
+        ? {fn:"review_parts_rider_application_with_note",args:{p_rider_id:id,p_approve:approve,p_note:note}}
+        : {fn:"review_towing_application",args:{p_towing_user_id:id,p_approve:approve,p_note:note}};
+    const {data,error}=await userClient.rpc(target.fn,target.args);
+    return error?json({error:error.message},400):json({ok:true,result:data});
+  }
+
   if (action === "list") {
     const requestedStatus = String(body.status ?? "pending");
     const allowedStatuses = new Set(["pending", "approved", "rejected", "draft", "all"]);
