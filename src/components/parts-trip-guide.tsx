@@ -36,7 +36,7 @@ export function PartsTripGuide({
   destination:PartsCoordinate|null;
   destinationLabel:string;
   ownPosition:PartsCoordinate|null;
-  mode?:"rider"|"motorist";
+  mode?:"rider"|"motorist"|"towing"|"tow_motorist";
 }){
   const camera=useRef<CameraRef>(null);
   const [ready,setReady]=useState(false);
@@ -68,7 +68,7 @@ export function PartsTripGuide({
   },[ready,destination?.latitude,destination?.longitude,ownPosition?.latitude!=null,focus]);
 
   useEffect(()=>{
-    if(mode!=="rider"||!destination||!ownPosition||!ROUTING_URL)return;
+    if(!["rider","towing"].includes(mode)||!destination||!ownPosition||!ROUTING_URL)return;
     let disposed=false;
     const loadRoadRoute=async()=>{
       const from=lastPosition.current;
@@ -104,7 +104,8 @@ export function PartsTripGuide({
 
   return <View style={styles.shell}>
     <View style={styles.heading}>
-      <Text style={styles.headingTitle}>{mode==="rider"?"Your route":"Rider's journey"}</Text>
+      <Text style={styles.headingTitle}>{mode==="motorist"?"Rider's journey":
+        mode==="tow_motorist"?"Your towing agent":"Your route"}</Text>
       {roadRoute?<Text style={styles.distance}>
         {roadRoute.distanceKm.toFixed(1)} km by road
       </Text>:distance!==null?<Text style={styles.distance}>
@@ -128,7 +129,9 @@ export function PartsTripGuide({
         </Marker>:null}
         {ownPosition?<Marker id="part-trip-rider" lngLat={[ownPosition.longitude,ownPosition.latitude]}>
           <View style={styles.riderMarker}>
-            <SymbolView name={{ios:"bicycle",android:"two_wheeler",web:"two_wheeler"} as never}
+            <SymbolView name={{ios:mode==="towing"||mode==="tow_motorist"?"truck.box.fill":"bicycle",
+              android:mode==="towing"||mode==="tow_motorist"?"local_shipping":"two_wheeler",
+              web:mode==="towing"||mode==="tow_motorist"?"local_shipping":"two_wheeler"} as never}
               tintColor="#FFFFFF" size={20}/>
           </View>
         </Marker>:null}
@@ -163,7 +166,7 @@ export function PartsTripGuide({
       This destination has no saved GPS pin. Ask the dealer or customer to save their precise location. You can still navigate using the written address.
     </Text>:null}
     {mapError?<Text style={styles.error}>{mapError}</Text>:null}
-    {mode==="rider"?<Pressable style={styles.navigate} accessibilityRole="button"
+    {(mode==="rider"||mode==="towing")?<Pressable style={styles.navigate} accessibilityRole="button"
       onPress={()=>void openNavigation(destination,destinationLabel).catch(e=>
         setOpenError(e instanceof Error?e.message:"Could not open maps."))}>
       <SymbolView name={{ios:"arrow.triangle.turn.up.right.diamond.fill",android:"navigation",web:"navigation"} as never}
