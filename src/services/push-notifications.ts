@@ -14,10 +14,12 @@ export type PushRegistrationResult = {
 };
 
 export async function ensureJobNotifications(userId: string): Promise<PushRegistrationResult> {
-  if (!Device.isDevice) {
+  // Android emulators with Google Play services can receive remote push.
+  // Fall back to the in-app offer feed when push setup is unavailable.
+  if (!Device.isDevice && Platform.OS !== "android") {
     return {
       registered: false,
-      message: "Push notifications require a physical device.",
+      message: "Remote push is not supported on this device.",
     };
   }
 
@@ -85,7 +87,7 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
  * current physical device; leave other mechanic devices subscribed.
  */
 export async function unregisterCurrentDevicePushToken(userId: string): Promise<void> {
-  if (!Device.isDevice) return;
+  if (!Device.isDevice && Platform.OS !== "android") return;
   const raw = globalThis.localStorage?.getItem(TOKEN_STORAGE_KEY);
   let token: string | undefined;
   if (raw) {
