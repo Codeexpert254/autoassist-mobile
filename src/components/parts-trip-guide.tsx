@@ -78,7 +78,7 @@ export function PartsTripGuide({
       try{
         const origin=`${from.longitude},${from.latitude}`;
         const end=`${destination.longitude},${destination.latitude}`;
-        const url=ROUTING_URL.replace(/\\/$/,"")+
+        const url=(ROUTING_URL.endsWith("/") ? ROUTING_URL.slice(0,-1) : ROUTING_URL)+
           `/route/v1/driving/${origin};${end}?overview=full&geometries=geojson&steps=false`;
         const response=await fetch(url,{signal:ctrl.signal});
         if(!response.ok)throw new Error("Routing provider is unavailable");
