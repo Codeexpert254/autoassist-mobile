@@ -46,6 +46,9 @@ export default function ActivePartDelivery(){
     try{
       const data=await oneOrder(id);
       if(data.rider_id!==user.id)throw new Error("This delivery is not assigned to your Rider account.");
+      // Keep the active-delivery screen focused on current work.
+      // After the Motorist confirms delivery, return to Rider home.
+      if(data.status==="delivered"){router.replace("/rider/dashboard");return;}
       setOrder(data);setError("");
     }catch(cause){setError(cause instanceof Error?cause.message:"Unable to open delivery.");}
     finally{setLoading(false);}
