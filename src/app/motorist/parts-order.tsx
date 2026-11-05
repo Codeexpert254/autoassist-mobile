@@ -2,6 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
+import { PartsTripGuide } from "@/components/parts-trip-guide";
+import { validPartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Notice, PartsPage, Section, Status, partStyles, BLUE, NAVY } from "@/components/parts-ui";
 import { type PartOrder, money, oneOrder } from "@/services/parts-data";
 import { existingPartRatings, motoristReceivedPart, ratePartsOrder } from "@/services/parts-orders";
@@ -11,8 +13,8 @@ const help:Record<string,string>={
   accepted:"The dealer confirmed stock and is preparing your part.",
   declined:"The dealer declined this order. Look for another available listing.",
   ready_for_pickup:"Your part is packed. AutoAssist is waiting for an available verified rider.",
-  rider_assigned:"A rider has accepted your delivery request.",
-  picked_up:"Your rider has collected the part. Confirm receipt only when it reaches you.",
+  rider_assigned:"A rider accepted the pickup and is heading to the Parts Dealer.",
+  picked_up:"Your rider has collected your part. You can confirm receipt once it has been delivered.",
   delivered:"You confirmed delivery. Rate the dealer and rider separately to improve future matches.",
 };
 function StarRating({label,done,onSubmit}:{label:"dealer"|"rider";done:boolean;onSubmit:(stars:number,comment:string)=>Promise<void>}){
@@ -87,6 +89,22 @@ export default function MotoristPartsOrder(){
         <Text style={partStyles.cardText}>Delivery destination: {order.delivery_location}</Text>
       </View>
       <Notice>{help[order.status]||"Your order status is updating."}</Notice>
+      {order.status==="picked_up"?<>
+        {order.delivery_started_at?<Notice tone="success">
+          Your rider has started the journey to you. The map refreshes while the Rider keeps the AutoAssist trip screen open.
+        </Notice>:<Notice>
+          Your rider confirmed pickup and is preparing to start the trip to your delivery address.
+        </Notice>}
+        {order.delivery_started_at?<>
+          <PartsTripGuide mode="motorist"
+            destination={validPartsCoordinate(order.delivery_latitude,order.delivery_longitude)}
+            destinationLabel={order.delivery_location}
+            ownPosition={validPartsCoordinate(order.rider_latitude,order.rider_longitude)}/>
+          {order.rider_location_updated_at &&
+            Date.now()-new Date(order.rider_location_updated_at).getTime()>35000
+              ?<Notice>The Rider's last GPS update is older than 35 seconds. The position may be outdated.</Notice>:null}
+        </>:null}
+      </>:null}
       {order.status==="picked_up"?<Action label="I received my spare part" busy={busy}
         onPress={confirm}/>:null}
       {order.status==="delivered"?<>
