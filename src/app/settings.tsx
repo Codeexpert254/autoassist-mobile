@@ -35,7 +35,6 @@ export default function Settings() {
   const [message, setMessage] = useState("");
   const [debug, setDebug] = useState("");
   const [admin, setAdmin] = useState(false);
-  const [canVerify, setCanVerify] = useState(false);
   const askedForOverlay = useRef(false);
   const mechRef = useRef<any>(null);
   mechRef.current = isDealer ? dealerShop : mechanic;
@@ -154,18 +153,10 @@ export default function Settings() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    void Promise.all([
-      Promise.resolve(requireSupabase().rpc("is_autoassist_admin" as never, {
-        p_user_id: user.id, p_required_role: null,
-      } as never)),
-      Promise.resolve(requireSupabase().rpc("is_autoassist_admin" as never, {
-        p_user_id: user.id, p_required_role: "verification_admin",
-      } as never)),
-    ]).then(([adminResult,verificationResult])=>{
-      if(active){
-        setAdmin(Boolean(adminResult.data) && !adminResult.error);
-        setCanVerify(Boolean(verificationResult.data) && !verificationResult.error);
-      }
+    void Promise.resolve(requireSupabase().rpc("is_autoassist_admin" as never, {
+      p_user_id: user.id, p_required_role: null,
+    } as never)).then(({ data }) => {
+      if (active) setAdmin(Boolean(data));
     }).catch(() => undefined);
     return () => { active = false; };
   }, [user?.id]);
@@ -251,16 +242,6 @@ export default function Settings() {
               </Pressable>
             ) : null}
           </View>
-
-          {canVerify ? (
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Verification</Text>
-              <Text style={styles.helper}>Review Mechanics, Parts Dealers, Riders and Towing Agents from one queue.</Text>
-              <Pressable style={styles.secondaryButton} onPress={() => router.push("/admin/verification")}>
-                <Text style={styles.secondaryText}>Open provider verification</Text>
-              </Pressable>
-            </View>
-          ) : null}
 
           {admin ? (
             <View style={styles.card}>
