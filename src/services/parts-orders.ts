@@ -4,11 +4,17 @@ const rpc=async (name:string,args:Record<string,unknown>)=>{
   const {data,error}=await client().rpc(name as never,args as never);
   if(error)throw error;return String(data??"");
 };
-export async function orderPart(partId:string,quantity:number,location:string,phone:string,repairId?:string|null,note="") {
-  const orderId=await rpc("place_parts_order",{
+export async function orderPart(partId:string,quantity:number,location:string,phone:string,
+  repairId?:string|null,note="",coords?:{latitude:number;longitude:number}|null) {
+  const argumentsBase={
     p_part_id:partId,p_quantity:quantity,p_delivery_location:location,
     p_delivery_phone:phone,p_repair_request_id:repairId??null,p_note:note,
-  });
+  };
+  const orderId=coords
+    ? await rpc("place_parts_order_with_coordinates",{
+        ...argumentsBase,p_delivery_latitude:coords.latitude,p_delivery_longitude:coords.longitude,
+      })
+    : await rpc("place_parts_order",argumentsBase);
   // The server validates buyer ownership before sending push notifications.
   // Notification failures never undo a successfully created order.
   try {
@@ -63,3 +69,15 @@ export async function marketplaceCommission():Promise<number> {
     .select("commission_percent").eq("id",true).single();
   if(error)throw error;return Number((data as any)?.commission_percent??7.5);
 }
+
+/** Explicit second leg: called only after the assigned rider confirms pickup. */
+export const startRiderCustomerTrip=(id:string)=>
+  rpc("start_parts_delivery_trip",{p_order_id:id});
+
+/** Share the Rider's position only while the second leg is active and in foreground. */
+export const publishRiderDeliveryLocation=async(id:string,latitude:number,longitude:number):Promise<void>=>{
+  const {error}=await client().rpc("publish_parts_rider_position" as never,{
+    p_order_id:id,p_latitude:latitude,p_longitude:longitude,
+  } as never);
+  if(error)throw error;
+};
