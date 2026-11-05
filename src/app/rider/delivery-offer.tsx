@@ -16,6 +16,15 @@ export default function RiderDeliveryOffer(){
     void availableDeliveries().then(x=>setOffer(x.find(y=>y.order_id===id)??null))
       .catch(e=>setError(e.message)).finally(()=>setLoading(false));
   },[id]);
+  const decline=async()=>{
+    if(!id||!offer?.offer_id||busy)return;
+    setBusy(true);setError("");
+    try {
+      await respondToRiderOffer(offer.offer_id,id,false);
+      router.replace("/rider/dashboard");
+    }catch(e){setError(e instanceof Error?e.message:"Unable to decline this offer.");}
+    finally{setBusy(false);}
+  };
   const accept=async()=>{
     if(!id||!offer?.offer_id||busy)return;setBusy(true);setError("");
     try{
@@ -37,7 +46,8 @@ export default function RiderDeliveryOffer(){
         </View>
         <Notice>For customer privacy, the full delivery location and phone number are shown only after you accept this job. Confirm that you are available to complete this pickup.</Notice>
         <Action label="Accept delivery" busy={busy} onPress={()=>void accept()}/>
-        <Action label="Not available" variant="outline" onPress={()=>router.replace("/rider/dashboard")}/>
+        <Action label="Decline this offer" variant="outline" disabled={busy}
+          onPress={()=>void decline()}/>
         {error?<Notice tone="error">{error}</Notice>:null}
       </>}
   </PartsPage>;
