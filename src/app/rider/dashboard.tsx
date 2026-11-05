@@ -1,8 +1,9 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Modal, Pressable, Switch, Text, View } from "react-native";
 import { useAuth } from "@/context/auth-context";
+import { ensureJobNotifications } from "@/services/push-notifications";
 import { Action, Notice, PartsPage, Section, Status, partStyles, BLUE, NAVY } from "@/components/parts-ui";
 import { type DeliveryLead, type RiderProfile, myRiderProfile,
   setRiderAvailable,availableDeliveries,assignedDeliveries } from "@/services/parts-riders";
@@ -13,19 +14,43 @@ export default function RiderDashboard(){
   const [leads,setLeads]=useState<DeliveryLead[]>([]);
   const [jobs,setJobs]=useState<any[]>([]);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
+  const [newPickup,setNewPickup]=useState<DeliveryLead|null>(null);
+  const seenOfferIds=useRef(new Set<string>());
+  const fetching=useRef(false);
   const load=useCallback(async()=>{
     if(!user||profile?.role!=="rider"){setLoading(false);return;}
+    if(fetching.current)return;
+    fetching.current=true;
     try{
       const r=await myRiderProfile(user.id);setRider(r);
       if(r?.verified){
         const [list,assigned]=await Promise.all([availableDeliveries(),assignedDeliveries(user.id)]);
         setLeads(list);setJobs(assigned);
-      }
+        if(r.is_available){
+          const fresh=list.find(item=>!seenOfferIds.current.has(item.offer_id));
+          if(fresh){
+            seenOfferIds.current.add(fresh.offer_id);
+            setNewPickup(fresh);
+          }
+        }else setNewPickup(null);
+      }else{setLeads([]);setJobs([]);setNewPickup(null);}
       setError("");
     }catch(e){setError(e instanceof Error?e.message:"Unable to load deliveries.");}
-    finally{setLoading(false);}
+    finally{fetching.current=false;setLoading(false);}
   },[user?.id,profile?.role]);
-  useFocusEffect(useCallback(()=>{void load();},[load]));
+  useFocusEffect(useCallback(()=>{
+    void load();
+    const timer=setInterval(()=>{
+      if(AppState.currentState==="active")void load();
+    },5000);
+    return()=>clearInterval(timer);
+  },[load]));
+  useEffect(()=>{
+    if(!user||!rider?.verified||!rider.is_available)return;
+    void ensureJobNotifications(user.id).then(result=>{
+      if(!result.registered)console.info("Rider push fallback: "+result.message);
+    }).catch(e=>console.warn("Rider push setup unavailable",e));
+  },[user?.id,rider?.verified,rider?.is_available]);
   const online=async(value:boolean)=>{
     if(!user||busy)return;setBusy(true);
     try{setRider(await setRiderAvailable(user.id,value));await load();}
@@ -68,6 +93,7 @@ export default function RiderDashboard(){
           </Pressable>)}
       </Section>
       <Section title="Available pickups">
+        {rider.is_available?<Notice>Pickup offers refresh automatically while this screen is open. If device push is unavailable, keep this dashboard visible during testing.</Notice>:null}
         {!rider.is_available?<Notice>Go online to see available delivery offers.</Notice>:
           !leads.length?<Notice>No approved dealer has a pickup ready for you right now.</Notice>:leads.map(offer=>
           <Pressable key={offer.order_id} accessibilityRole="button"
@@ -84,5 +110,23 @@ export default function RiderDashboard(){
       </View>
       {error?<Notice tone="error">{error}</Notice>:null}
     </>}
+    <Modal visible={Boolean(newPickup&&rider?.is_available)} transparent animationType="fade"
+      onRequestClose={()=>setNewPickup(null)}>
+      <View style={{flex:1,backgroundColor:"#0009",padding:24,justifyContent:"center"}}>
+        <View style={{backgroundColor:"#FFFFFF",borderRadius:18,padding:22}}>
+          <Text style={{fontSize:20,color:NAVY,fontFamily:"Inter_600SemiBold"}}>New pickup offer</Text>
+          <Text style={{color:NAVY,fontSize:15,marginTop:12,fontFamily:"Inter_600SemiBold"}}>
+            {newPickup?.part_title??"Spare parts delivery"}
+          </Text>
+          <Text style={partStyles.cardText}>{newPickup?.shop_name} · {newPickup?.pickup_location}</Text>
+          <Notice>Review the pickup now. Offers expire after two minutes.</Notice>
+          <Action label="View pickup offer" onPress={()=>{
+            const orderId=newPickup?.order_id;setNewPickup(null);
+            if(orderId)router.push({pathname:"/rider/delivery-offer",params:{orderId}});
+          }}/>
+          <Action label="Dismiss alert" variant="outline" onPress={()=>setNewPickup(null)}/>
+        </View>
+      </View>
+    </Modal>
   </PartsPage>;
 }
