@@ -1,5 +1,6 @@
 import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -7,7 +8,7 @@ import { useAuth } from "@/context/auth-context";
 import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Field, Notice, PartsPage, BLUE, NAVY } from "@/components/parts-ui";
 import {
-  distanceLabels,requestTow,towIndicativePrice,towMoney,vehicleNames,
+  distanceLabels,myTowRequests,requestTow,towIndicativePrice,towMoney,vehicleNames,
   type VehicleCategory,type TowDistanceBand,
 } from "@/services/towing-jobs";
 
@@ -21,6 +22,17 @@ export default function RequestTowing(){
  const [plate,setPlate]=useState(""),[phone,setPhone]=useState(profile?.phone??"");
  const [description,setDescription]=useState(""),[working,setWorking]=useState(false),[error,setError]=useState("");
  const estimate=towIndicativePrice(vehicle,band);
+ useEffect(()=>{
+   if(!user||profile?.role!=="motorist")return;
+   let active=true;
+   void myTowRequests(user.id).then(requests=>{
+     const existing=requests.find(r=>!["completed","cancelled"].includes(r.status));
+     if(active&&existing)router.replace({
+       pathname:"/motorist/tow-assigned",params:{requestId:existing.id},
+     });
+   }).catch(()=>undefined);
+   return()=>{active=false;};
+ },[user?.id,profile?.role]);
  const submit=async()=>{
    if(!user||profile?.role!=="motorist"||working)return;
    if(!pickup){setError("Choose the breakdown location using your current GPS or the map.");return;}
