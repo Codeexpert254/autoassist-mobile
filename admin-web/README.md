@@ -69,7 +69,7 @@ Safety limitations:
 ## Current live modules
 
 - Overview
-- Mechanic verification
+- Unified provider verification: Mechanics, Parts Dealers (including garages), Riders and Towing Agents
 - Users
 - Live repair jobs
 - Connection payments
@@ -90,3 +90,32 @@ Server-side admin roles currently supported:
 - `ops_admin`
 
 The initial authorized owner account is migrated to `super_admin`.
+
+
+## Provider verification
+
+Open **Verification** in the existing web-only Super Admin console. Use the
+provider-type chips (All providers, Mechanics, Parts Dealers, Riders,
+Towing Agents) and status filters (Pending, Approved, Rejected, All).
+
+- **Mechanics** keep their existing identity, OCR and documentary review.
+  Their secure legacy detail/review API remains supported.
+- **Parts Dealers** and **garage sellers** appear with registered shop details,
+  business identifiers and location. These submissions currently lack a
+  dedicated private proof upload, so independently validate business documents.
+- **Riders** appear with registered vehicle details and account information.
+  Identity/vehicle evidence is not yet uploaded; independently verify before
+  approval. Rejections can be corrected and resubmitted.
+- **Towing Agents** upload a towing operating licence, insurance certificate,
+  and vehicle photograph to the private `towing-verification` bucket.
+  Approved accounts can access their towing dashboard; rejected applicants
+  can correct their details and resubmit.
+
+Only **super_admin** and **verification_admin** can review these applications.
+All authorization is enforced in the JWT-protected `admin-verification`
+Edge Function and privileged database review RPCs. The browser never uses
+a service-role key. Evidence links expire after 5 minutes.
+
+New Supabase migrations for towing applications, rider decisions, audit fields,
+and guarded approval state were deployed to the connected project. The separate
+web console continues to run at `http://localhost:4173` for local development.

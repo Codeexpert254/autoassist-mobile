@@ -31,6 +31,10 @@ jobs:
       - name: TypeScript
         run: npx tsc --noEmit
 
+      - name: Admin web JavaScript syntax
+        run: node --check admin-web/app.js
+
+
       - name: Confirm generated Android manifest has native overlay FCM service
         run: |
           npx expo prebuild --platform android --clean --no-install
