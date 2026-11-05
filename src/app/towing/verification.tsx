@@ -1,6 +1,2 @@
-import { StaticScreen } from "@/components/autoassist-ui";
-import { towingScreens } from "@/data/autoassist-screens";
-
-export default function Verification() {
-  return <StaticScreen {...towingScreens.verification} />;
-}
+import TowingVerificationForm from "@/components/towing-verification-functional";
+export default TowingVerificationForm;
