@@ -81,3 +81,7 @@ export const publishRiderDeliveryLocation=async(id:string,latitude:number,longit
   } as never);
   if(error)throw error;
 };
+
+/** Rider-only arrival checkpoint; no geo-fence is implied by a manual tap. */
+export const markRiderArrivedAtDealer=(id:string)=>
+  rpc("mark_parts_rider_arrived_dealer",{p_order_id:id});
