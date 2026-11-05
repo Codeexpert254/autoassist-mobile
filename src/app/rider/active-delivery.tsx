@@ -9,7 +9,8 @@ import { PartsTripGuide } from "@/components/parts-trip-guide";
 import { validPartsCoordinate, type PartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Notice, PartsPage, Status, partStyles, BLUE, NAVY } from "@/components/parts-ui";
 import { type PartOrder, oneOrder } from "@/services/parts-data";
-import { riderPickedUp, startRiderCustomerTrip, publishRiderDeliveryLocation } from "@/services/parts-orders";
+import { riderPickedUp, startRiderCustomerTrip, publishRiderDeliveryLocation,
+  markRiderArrivedAtDealer } from "@/services/parts-orders";
 
 function contact(kind:"call"|"sms",phone?:string|null){
   const clean=String(phone??"").replace(/[^0-9+]/g,"");
@@ -91,6 +92,13 @@ export default function ActivePartDelivery(){
     return()=>{disposed=true;watcher?.remove();};
   },[id,active,driving,profile?.role]));
 
+  const arrived=async()=>{
+    if(!id||busy)return;
+    setBusy(true);setError("");
+    try{await markRiderArrivedAtDealer(id);await load();}
+    catch(cause){setError(cause instanceof Error?cause.message:"Unable to record arrival.");}
+    finally{setBusy(false);}
+  };
   const collected=()=>Alert.alert("Confirm part collection",
     "Confirm only after the dealer physically hands over the correct spare part.",
     [{text:"Not yet",style:"cancel"},{text:"I've collected the part",onPress:()=>void(async()=>{
@@ -148,7 +156,9 @@ export default function ActivePartDelivery(){
         </View>:null}
 
         {order.status==="rider_assigned"?<Notice>
-          Step 1: Navigate to the Parts Dealer, contact them if needed, and confirm collection only when you receive the item.
+          {order.arrived_at_dealer_at
+            ?"You have marked yourself as arrived. Check the item with the dealer and confirm collection only once it is handed to you."
+            :"Step 1: Navigate to the Parts Dealer, call or message them if needed, then tap 'I've arrived at dealer'."}
         </Notice>:null}
         {order.status==="picked_up"&&!driving?<Notice>
           Part collected. Step 2: Start the trip toward the Motorist to share your live GPS position while this screen is open.
@@ -178,9 +188,12 @@ export default function ActivePartDelivery(){
           </Notice>:null}
           {gpsNotice?<Notice>{gpsNotice}</Notice>:null}
 
-          {order.status==="rider_assigned"?<Action label="I have collected the part"
-            busy={busy} onPress={collected}
-            icon={{ios:"checkmark.circle.fill",android:"check_circle",web:"check_circle"}}/>:null}
+          {order.status==="rider_assigned"&&!order.arrived_at_dealer_at?
+            <Action label="I've arrived at dealer" busy={busy} onPress={()=>void arrived()}
+              icon={{ios:"mappin.circle.fill",android:"place",web:"place"}}/>:null}
+          {order.status==="rider_assigned"&&order.arrived_at_dealer_at?
+            <Action label="Confirm part collected" busy={busy} onPress={collected}
+              icon={{ios:"checkmark.circle.fill",android:"check_circle",web:"check_circle"}}/>:null}
           {order.status==="picked_up"&&!driving?<Action label="Start trip to Motorist"
             busy={busy} onPress={()=>void begin()}
             icon={{ios:"location.north.fill",android:"navigation",web:"navigation"}}/>:null}
