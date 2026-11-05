@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuth } from "@/context/auth-context";
@@ -31,11 +31,16 @@ export default function DealerOrderDetails(){
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState("");
   const [noticeTone,setNoticeTone]=useState<"info"|"success">("info");
+  const lastStatus=useRef<string|null>(null);
   const load=async()=>{
     if(!id)return;
     try{
       const data=await oneOrder(id);
       if(data.parts_shops?.owner_id!==user?.id)throw Error("This order does not belong to your shop.");
+      if(data.status==="delivered"&&lastStatus.current&&lastStatus.current!=="delivered"){
+        router.replace("/partsdealer/dashboard");return;
+      }
+      lastStatus.current=data.status;
       setOrder(data);setError("");
     }catch(e){setError(e instanceof Error?e.message:"Unable to load order.");}
     finally{setLoading(false);}
