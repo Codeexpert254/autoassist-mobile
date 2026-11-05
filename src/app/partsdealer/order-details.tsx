@@ -13,6 +13,7 @@ export default function DealerOrderDetails(){
   const {user}=useAuth();
   const [order,setOrder]=useState<PartOrder|null>(null),[loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+  const [noticeTone,setNoticeTone]=useState<"info"|"success">("info");
   const load=async()=>{
     if(!id)return;
     try{const o=await oneOrder(id);if(o.parts_shops?.owner_id!==user?.id)
@@ -30,11 +31,17 @@ export default function DealerOrderDetails(){
       else if(action==="retry")matching=await requestRiderDispatch(order.id);
       else await respondToPartOrder(order.id,action==="accept",action==="out_of_stock");
       await load();
-      setNotice(action==="accept"?"Order accepted. Stock was reserved for this order.":
+      const result=matching?.state;
+      setNoticeTone(action==="accept"||result==="offered"||result==="existing_offer"?"success":"info");
+      setNotice(action==="accept"?
+        "Order accepted. Pack the part, then tap 'Packed · Ready for rider pickup' to request a verified rider.":
         action==="ready"||action==="retry"
-          ? matching?.state==="offered"||matching?.state==="existing_offer"
-            ? "A verified rider is being offered this pickup."
-            : "No rider has accepted yet. You can retry matching without changing the order."
+          ? result==="offered"?"Pickup offer sent. The eligible Rider can review it in their dashboard for two minutes.":
+            result==="existing_offer"?"A Rider already has an active two-minute offer. Wait for their response or for it to expire before retrying.":
+            result==="no_available_rider"?"No eligible rider is free. Check that a verified Rider account is online, then retry matching.":
+            result==="dispatch_unavailable"?"The part is ready, but matching could not be reached. Check your connection and retry.":
+            result==="not_ready"?"The order is not currently ready for rider matching.":
+            "No pickup offer was created. Check rider availability and retry."
           : action==="out_of_stock"?"Order declined; inventory quantity set to zero.":"Order declined.");
     }catch(e){setError(e instanceof Error?e.message:"Unable to update order.");}
     finally{setBusy(false);}
@@ -93,8 +100,11 @@ export default function DealerOrderDetails(){
             onPress={()=>confirmDecline(true)}/></View>
         </View>
       </>:null}
-      {order.status==="accepted"?<Action label="Packed · Ready for rider pickup" busy={busy}
-        onPress={()=>void act("ready")}/>:null}
+      {order.status==="accepted"?<>
+        <Notice>Next, pack the item. When it is ready for collection, the button below automatically starts matching with available verified riders.</Notice>
+        <Action label="Packed · Ready for rider pickup" busy={busy}
+          onPress={()=>void act("ready")}/>
+      </>:null}
       {order.status==="ready_for_pickup"?<>
         <Notice>Your item is ready. AutoAssist offers it to one available verified rider at a time. You can retry if no rider responds.</Notice>
         <Action label="Retry rider matching" busy={busy}
@@ -105,7 +115,7 @@ export default function DealerOrderDetails(){
       {order.status==="picked_up"?<Notice>The rider picked up the part. Waiting for motorist confirmation.</Notice>:null}
       {order.status==="delivered"?<Notice tone="success">The customer confirmed delivery.</Notice>:null}
       {order.status==="declined"?<Notice tone="error">{order.decline_reason||"Order declined."}</Notice>:null}
-      {notice?<Notice tone="success">{notice}</Notice>:null}
+      {notice?<Notice tone={noticeTone}>{notice}</Notice>:null}
       {error?<Notice tone="error">{error}</Notice>:null}
     </>}
   </PartsPage>;
