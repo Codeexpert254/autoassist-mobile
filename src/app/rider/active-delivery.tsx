@@ -1,8 +1,8 @@
 import * as Location from "expo-location";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuth } from "@/context/auth-context";
 import { PartsTripGuide } from "@/components/parts-trip-guide";
@@ -58,12 +58,12 @@ export default function ActivePartDelivery(){
   const driving=order?.status==="picked_up"&&Boolean(order.delivery_started_at);
   const active=order?.status==="rider_assigned"||order?.status==="picked_up";
 
-  useEffect(()=>{
+  useFocusEffect(useCallback(()=>{
     if(!active||!id||profile?.role!=="rider")return;
     let disposed=false;
     let watcher:Location.LocationSubscription|null=null;
     const onFix=(fix:Location.LocationObject)=>{
-      if(disposed)return;
+      if(disposed||AppState.currentState!=="active")return;
       const point=validPartsCoordinate(fix.coords.latitude,fix.coords.longitude);
       if(!point)return;
       setOwnPosition(point);
@@ -89,7 +89,7 @@ export default function ActivePartDelivery(){
       }catch(e){if(!disposed)setGpsNotice(e instanceof Error?e.message:"Unable to start GPS.");}
     })();
     return()=>{disposed=true;watcher?.remove();};
-  },[id,active,driving,profile?.role]);
+  },[id,active,driving,profile?.role]));
 
   const collected=()=>Alert.alert("Confirm part collection",
     "Confirm only after the dealer physically hands over the correct spare part.",
