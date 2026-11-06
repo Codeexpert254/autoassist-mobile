@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuth } from "@/context/auth-context";
 import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-location-picker";
+import { TowDestinationPicker } from "@/components/tow-destination-picker";
 import { Action, Field, Notice, PartsPage, BLUE, NAVY } from "@/components/parts-ui";
 import {
   distanceLabels,myTowRequests,requestTow,towIndicativePrice,towMoney,vehicleNames,
@@ -36,6 +37,7 @@ export default function RequestTowing(){
  const submit=async()=>{
    if(!user||profile?.role!=="motorist"||working)return;
    if(!pickup){setError("Choose the breakdown location using your current GPS or the map.");return;}
+   if(!destination){setError("Select a destination suggestion or confirm a precise pin on the map.");return;}
    if(destinationText.trim().length<5||phone.trim().length<9||plate.trim().length<3){
      setError("Add the towing destination, registration and contact phone.");return;
    }
@@ -70,13 +72,10 @@ export default function RequestTowing(){
        onPick={(point,label)=>{setPickup(point);setPickupText(label);}}/>
      <Field label="Pickup landmark" value={pickupText} onChangeText={setPickupText}
        placeholder="Road, estate or nearby landmark"/>
-     <Text style={styles.heading}>2. Where should we tow it?</Text>
-     <PartsLocationPicker title="Drop-off destination (optional pin)" value={destination}
-       help="Set a precise garage or parking destination, or type the address below."
-       onPick={(point,label)=>{setDestination(point);setDestinationText(label);}}/>
-     <Field label="Destination garage or address" value={destinationText}
-       onChangeText={(v)=>{setDestinationText(v);setDestination(null);}}
-       placeholder="Garage, street, town"/>
+     <Text style={styles.heading}>2. Where should we tow it to?</Text>
+     <TowDestinationPicker value={destination} label={destinationText}
+       onPick={(point,label)=>{setDestination(point);setDestinationText(label);}}
+       onTextChange={(text)=>{setDestinationText(text);setDestination(null);}}/>
      <Text style={styles.heading}>3. Vehicle details</Text>
      <Text style={styles.fieldLabel}>Vehicle category</Text>
      <View style={styles.choices}>
@@ -108,7 +107,7 @@ export default function RequestTowing(){
        <Text style={styles.pricingDescription}>Rates depend on distance, vehicle weight, recovery conditions and location. The agent submits a final quote for your approval before travel. No payment is taken now.</Text>
      </View>
      {error?<Notice tone="error">{error}</Notice>:null}
-     <Action label="Find an available towing agent" busy={working} disabled={!pickup}
+     <Action label="Find an available towing agent" busy={working} disabled={!pickup||!destination}
        onPress={()=>void submit()}/>
      <Text style={styles.footer}>For accidents, injury or immediate danger, contact emergency services first. Do not stay in a hazardous road position to complete this form.</Text>
    </>}
