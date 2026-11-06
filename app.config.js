@@ -1,7 +1,21 @@
+const fs = require("node:fs");
+const path = require("node:path");
 // Dynamic configuration keeps each developer's local app.json (Firebase,
 // Supabase/EAS IDs, native overlay plugin) intact. No map key is needed.
 const base = require("./app.json").expo;
 const originalPlugins = base.plugins ?? [];
+// Use local custom chimes when assets/notifications/default(.wav/.mp3) and
+// default1(.wav/.mp3) have been copied into this worktree. Otherwise use
+// the Android/iOS system notification sound without breaking CI.
+const folder = path.join(__dirname, "assets", "notifications");
+const available = fs.existsSync(folder) ? fs.readdirSync(folder) : [];
+const findSound = stem => available.find(name =>
+  new RegExp("^" + stem + "\\.(wav|mp3|aiff)$", "i").test(name)) || null;
+const primarySound = findSound("default");
+const backupSound = findSound("default1");
+const soundPaths = [...new Set([primarySound, backupSound].filter(Boolean))]
+  .map(name => "./assets/notifications/" + name);
+
 const nameOf = (entry) => Array.isArray(entry) ? entry[0] : entry;
 const currentLocation = originalPlugins.find((entry) => nameOf(entry) === "expo-location");
 const locationOptions = Array.isArray(currentLocation) ? currentLocation[1] ?? {} : {};
@@ -20,9 +34,16 @@ module.exports = ({ config }) => ({
   extra: {
     ...(config.extra ?? {}),
     ...(base.extra ?? {}),
+    notificationSounds: { primary: primarySound || backupSound || "default", backup: backupSound || primarySound || "default" },
   },
   plugins: [
-    ...originalPlugins.filter((entry) => !["expo-location", "react-native-maps", "@maplibre/maplibre-react-native"].includes(nameOf(entry))),
+    ...originalPlugins.filter(entry => !["expo-location","react-native-maps",
+      "@maplibre/maplibre-react-native","expo-notifications"].includes(nameOf(entry))),
+    ["expo-notifications", {
+      ...(Array.isArray(originalPlugins.find(entry => nameOf(entry) === "expo-notifications"))
+        ? originalPlugins.find(entry => nameOf(entry) === "expo-notifications")[1] : {}),
+      sounds: soundPaths,
+    }],
     // Preserve the single-FCM-service native overlay behavior in clean CI
     // builds as well as local app.json files.
     ...(!originalPlugins.some((entry) => nameOf(entry) === "./plugins/with-autoassist-fcm")
