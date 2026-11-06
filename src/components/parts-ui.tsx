@@ -15,10 +15,14 @@ export function PartsPage({title,subtitle,children,back,settings=false,logoutRol
 }) {
   const router=useRouter();
   const [refreshing,setRefreshing]=useState(false);
-  const pullToRefresh=useCallback(async()=>{
+  const pullToRefresh=useCallback(()=>{
     if(!refresh||refreshing)return;
     setRefreshing(true);
-    try{await Promise.resolve(refresh());}finally{setRefreshing(false);}
+    // Keep the native indicator brief; the data request may finish in the background.
+    setTimeout(()=>setRefreshing(false),1100);
+    void Promise.resolve().then(refresh).catch(error=>{
+      console.warn("Could not refresh this screen",error);
+    });
   },[refresh,refreshing]);
   return <View style={styles.screen}><SafeAreaView style={styles.safe}>
     <View style={styles.header}>
