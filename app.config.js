@@ -56,6 +56,7 @@ module.exports = ({ config }) => ({
       isAndroidBackgroundLocationEnabled: true,
       isAndroidForegroundServiceEnabled: true,
     }],
+    "./plugins/with-autoassist-test-flavors",
     // MapLibre loads OpenFreeMap tiles directly. No Google key or billing.
     "@maplibre/maplibre-react-native",
   ],
