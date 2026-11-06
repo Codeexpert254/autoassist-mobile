@@ -7,6 +7,7 @@ import { useAuth } from "@/context/auth-context";
 import { getTowingApplication, type TowingApplication } from "@/components/towing-verification-functional";
 import { Action, Notice, PartsPage, Status, BLUE, NAVY } from "@/components/parts-ui";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { startOfferAlert, stopOfferAlert } from "@/services/offer-attention";
 import { myTowingJobs,setTowingOnline,towingOffers,towingPresence,towMoney,
   type TowOffer,type TowRequest } from "@/services/towing-jobs";
 
@@ -58,6 +59,11 @@ export default function TowingDashboard(){
       if(!result.registered)console.info("Towing foreground notifications active:",result.message);
     }).catch(e=>console.warn("Towing push token unavailable",e));
   },[user?.id,approved,online]);
+  useEffect(()=>{
+    if(!popup||!approved||!online)return;
+    void startOfferAlert(popup.offer_id,"New towing request",`${popup.vehicle_registration} · ${popup.pickup_area}`);
+    return()=>stopOfferAlert(popup.offer_id);
+  },[popup?.offer_id,approved,online]);
   const toggle=async(next:boolean)=>{
     if(busy||selected)return;
     setBusy(true);setError("");
