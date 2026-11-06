@@ -76,12 +76,15 @@ export default function MarketplaceEarnings(){
         <Stat label={selectedRole==="rider"?"Quoted delivery fees":"Gross service value"}
           value={formatKes(summary?.grossKes??0)}/>
         <Stat label="Platform commission" value={formatKes(summary?.commissionKes??0)}/>
-        <Stat label="Verified payouts" value="KES 0"/>
+        <Stat label="Actually paid out" value={formatKes(summary?.paidOutKes??0)}/>
         <Stat label="Orders / jobs" value={String(summary?.lines.length??0)}/>
       </View>
       <View style={styles.information}>
         <Text style={styles.informationTitle}>How your earnings will work</Text>
         <Text style={styles.informationText}>{content?.policy}</Text>
+        <Text style={styles.informationText}>
+          Current payment collection: {summary?.collectionEnabled?"Enabled":"Not enabled"} · M-PESA payouts: {summary?.payoutsEnabled?"Enabled":"Not enabled"}.
+        </Text>
         <Text style={styles.informationText}>
           AutoAssist must verify the customer's payment on the server, then reconcile
           completion, refunds and disputes before any amount can be released.
