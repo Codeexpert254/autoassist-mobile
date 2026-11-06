@@ -100,7 +100,12 @@ export default function MotoristTowTracking(){
         <Action label="Retry agent matching" busy={busy} onPress={()=>void command("retry")}/>
         <Action label="Cancel towing request" variant="outline" disabled={busy} onPress={confirmCancel}/>
       </>:null}
-      {request.status==="quote_pending"?<View style={styles.quoteCard}>
+      {request.status==="searching"&&request.pricing_version===2?<View style={styles.quoteCard}>
+        <Text style={styles.label}>UPFRONT LOCKED FARE</Text>
+        <Text style={styles.price}>{towMoney(request.quote_kes)}</Text>
+        <Text style={styles.info}>Your price is fixed by AutoAssist. An eligible towing operator cannot increase it.</Text>
+      </View>:null}
+      {request.status==="quote_pending"&&request.pricing_version!==2?<View style={styles.quoteCard}>
         <Text style={styles.label}>FINAL TOWING QUOTE</Text>
         <Text style={styles.price}>{towMoney(request.quote_kes)}</Text>
         <Text style={styles.info}>The agent proposed this total for the towing service. Review before approving. No payment is being charged yet.</Text>
@@ -110,9 +115,9 @@ export default function MotoristTowTracking(){
           onPress={()=>void command("reject")}/>
       </View>:null}
       {live?<View style={styles.card}>
-        <Text style={styles.label}>AGREED TOWING PRICE</Text>
+        <Text style={styles.label}>AUTOASSIST FIXED TOWING FARE</Text>
         <Text style={styles.price}>{towMoney(request.quote_kes)}</Text>
-        <Notice>This is the agreed price, not proof of payment. Online M-PESA collection and settlement are not yet enabled.</Notice>
+        <Notice>This fare was fixed before dispatch; it is not proof of payment. Online M-PESA collection and settlement are not yet enabled.</Notice>
       </View>:null}
       {live?<PartsTripGuide mode="tow_motorist"
         destination={target}
