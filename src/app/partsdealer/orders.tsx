@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -19,8 +19,15 @@ const labels:Record<string,string>={
 const ongoing=["accepted","ready_for_pickup","rider_assigned","picked_up"];
 export default function DealerOrders(){
   const router=useRouter(),{user}=useAuth();
+  const params=useLocalSearchParams<{filter?:string}>();
+  const filterParam=Array.isArray(params.filter)?params.filter[0]:params.filter;
   const [shop,setShop]=useState<PartsShop|null>(null),[orders,setOrders]=useState<PartOrder[]>([]);
   const [filter,setFilter]=useState<Filter>("All");
+  useEffect(()=>{
+    const selected:Filter=filterParam==="new"?"New":filterParam==="progress"?"In progress":
+      filterParam==="completed"?"Completed":"All";
+    setFilter(selected);
+  },[filterParam]);
   const [loading,setLoading]=useState(true),[error,setError]=useState("");
   const load=useCallback(async()=>{
     if(!user){setLoading(false);return;}
