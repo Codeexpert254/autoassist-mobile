@@ -234,6 +234,8 @@ export default function PartsDealerDashboard(){
           <Text style={styles.emptyTitle}>You're all caught up</Text>
           <Text style={styles.emptyDescription}>New orders and active deliveries will appear here.</Text>
         </View>}
+      <Action label="View earnings and commissions" variant="outline"
+        onPress={()=>router.push("/earnings")}/>
       <View style={styles.sectionHeading}><Text style={styles.heading}>Business overview</Text></View>
       <View style={styles.revenue}>
         <View style={styles.financeRow}><Text style={styles.financeLabel}>Completed sales</Text>
