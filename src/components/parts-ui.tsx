@@ -28,8 +28,10 @@ export function PartsPage({title,subtitle,children,back,settings=false,logoutRol
         <SymbolView name={{ios:"arrow.clockwise",android:"refresh",web:"refresh"} as never} tintColor={BLUE} size={21}/>
       </Pressable>:null}
       {settings?<SettingsButton/>:null}
-      {logoutRole?<DashboardLogoutButton role={logoutRole}/>:null}
     </View>
+    {logoutRole?<View style={styles.logoutStrip}>
+      <DashboardLogoutButton role={logoutRole}/>
+    </View>:null}
     <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       {loading?<ActivityIndicator color={BLUE} style={{marginVertical:24}}/>:children}
     </ScrollView>
@@ -82,6 +84,8 @@ const styles=StyleSheet.create({
   header:{flexDirection:"row",gap:9,paddingHorizontal:17,paddingVertical:12,alignItems:"center",
     borderBottomWidth:1,borderBottomColor:BORDER,backgroundColor:"#FFFFFF"},
   back:{height:40,width:36,alignItems:"center",justifyContent:"center"},
+  logoutStrip:{flexDirection:"row",justifyContent:"flex-end",backgroundColor:"#FFFFFF",
+    paddingHorizontal:18,paddingBottom:9,borderBottomWidth:1,borderBottomColor:BORDER},
   iconBtn:{height:40,width:40,alignItems:"center",justifyContent:"center"},
   title:{color:NAVY,fontFamily:"Inter_600SemiBold",fontSize:19},
   subtitle:{color:MUTED,fontFamily:"Inter_400Regular",fontSize:11,lineHeight:16,marginTop:3},
