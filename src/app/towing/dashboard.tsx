@@ -80,7 +80,7 @@ export default function TowingDashboard(){
     router.push({pathname:"/towing/tow-offer",params:{offerId:offer.offer_id}});
   };
   const jobsDone=jobs.filter(j=>j.status==="completed");
-  return <PartsPage title="Recovery workspace" subtitle="AutoAssist towing partner" settings
+  return <PartsPage title="Recovery workspace" subtitle="AutoAssist towing partner" settings logoutRole="towing"
     refresh={()=>void load()} loading={loading&&!record} scrollRef={scrollRef}>
     {profile?.role!=="towing"?<Notice tone="error">Sign in as a verified Towing Agent.</Notice>:
     !approved?<View style={styles.verification}>
