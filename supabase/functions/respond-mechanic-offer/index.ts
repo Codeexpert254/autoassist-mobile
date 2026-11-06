@@ -51,7 +51,7 @@ async function sendPush(service: any, userId: string, payload: { title: string; 
       sound: "default",
       priority: "high",
       ...payload,
-      channelId: isMechanicOffer ? "autoassist-offers-v4" : "jobs",
+      channelId: isMechanicOffer ? "autoassist-offers-v4" : "autoassist-updates-v2",
     },
     ...(isMechanicOffer ? [{
       to: item.expo_push_token,
