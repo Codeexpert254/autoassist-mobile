@@ -9,6 +9,7 @@ const configured = (Constants.expoConfig?.extra?.notificationSounds ?? {}) as So
 // exist at build time; otherwise "default" is the OS notification sound.
 export const primaryNotificationSound = configured.primary ?? "default";
 export const backupNotificationSound = configured.backup ?? "default";
+export const GENERAL_CHANNEL = "autoassist-updates-v2";
 export const REQUEST_CHANNEL = "autoassist-offers-v4";
 export const STATUS_CHANNEL = "autoassist-status-v1";
 export const BACKUP_CHANNEL = "autoassist-backup-v1";
@@ -16,7 +17,7 @@ export const BACKUP_CHANNEL = "autoassist-backup-v1";
 export async function ensureAutoAssistNotificationChannels() {
   if (Platform.OS !== "android") return;
   await Promise.all([
-    Notifications.setNotificationChannelAsync("jobs", {
+    Notifications.setNotificationChannelAsync(GENERAL_CHANNEL, {
       name:"AutoAssist updates",importance:Notifications.AndroidImportance.HIGH,
       sound:primaryNotificationSound,vibrationPattern:[0,250,150,250],
     }),
