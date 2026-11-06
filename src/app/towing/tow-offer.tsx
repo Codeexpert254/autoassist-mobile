@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { Action, Notice, PartsPage, BLUE, NAVY } from "@/components/parts-ui";
 import { useAuth } from "@/context/auth-context";
