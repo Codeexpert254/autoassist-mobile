@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -182,9 +182,17 @@ export default function Dashboard() {
       // Signing out is more important than an availability cleanup failure.
     }
     disableFloatingOffers();
-    await signOut();
-    router.replace({ pathname: "/login", params: { role: "mechanic" } });
+    try{
+      await signOut();
+      router.replace({ pathname: "/login", params: { role: "mechanic" } });
+    }catch(cause){
+      Alert.alert("Unable to log out",cause instanceof Error?cause.message:"Please try again.");
+    }
   };
+  const confirmLogout=()=>Alert.alert("Log out of AutoAssist?",
+    "You'll stop receiving new offers on this account until you sign in and go online again.",
+    [{text:"Stay signed in",style:"cancel"},
+     {text:"Log out",style:"destructive",onPress:()=>void logout()}]);
 
   if (loading && !mechanicProfile) {
     return (
@@ -233,7 +241,7 @@ export default function Dashboard() {
                 <Text style={styles.title}>Welcome, {firstName}</Text>
               </View>
               <SettingsButton />
-              <Pressable onPress={() => void logout()} style={styles.logoutButton}>
+              <Pressable onPress={confirmLogout} accessibilityRole="button" accessibilityLabel="Log out of AutoAssist" style={styles.logoutButton}>
                 <Text style={styles.logoutText}>Logout</Text>
               </Pressable>
             </View>
@@ -323,6 +331,21 @@ export default function Dashboard() {
           </View>
           <Text style={styles.subtitle}>{isGarage ? "Verified garage / business" : "Verified individual mechanic"}</Text>
 
+          <View style={styles.welcomeHero}>
+            <View style={styles.welcomeTop}>
+              <View style={styles.welcomeIcon}>
+                <SymbolView name={{ios:"wrench.and.screwdriver.fill",android:"handyman",web:"handyman"} as never}
+                  size={23} tintColor="#FFFFFF"/>
+              </View>
+              <Text style={styles.welcomeBadge}>{activeRepair?"ACTIVE JOB":isAvailable?"● READY FOR WORK":"○ NOT TAKING REQUESTS"}</Text>
+            </View>
+            <Text style={styles.welcomeTitle}>{activeRepair?"Focus on your current repair":isAvailable?"Let's get you connected":"Ready to help motorists?"}</Text>
+            <Text style={styles.welcomeBody}>
+              {activeRepair?"Open your assignment to check payment, contact details and job progress.":
+                isAvailable?"You'll see matched repair requests here. Check each offer before accepting.":
+                  "Switch online below when you are available to take a repair request."}
+            </Text>
+          </View>
           <View style={[styles.availabilityCard, isAvailable && styles.availabilityCardActive]}>
             <View style={styles.availabilityTop}>
               <View style={[styles.statusDot, isAvailable && styles.statusDotActive]} />
@@ -371,12 +394,20 @@ export default function Dashboard() {
             </View>
           ) : null}
 
+          <View style={styles.sectionIntro}>
+            <Text style={styles.sectionTitle}>Your performance</Text>
+            <Text style={styles.sectionHint}>Updated as you finish jobs</Text>
+          </View>
           <View style={styles.metricsRow}>
             <Metric label="Rating" value={rating > 0 ? rating.toFixed(1) : "New"} />
             <Metric label="Completed" value={String(mechanicProfile?.completed_jobs ?? 0)} />
             <Metric label="Acceptance" value={responseRate == null ? "New" : `${responseRate}%`} />
           </View>
 
+          <View style={styles.sectionIntro}>
+            <Text style={styles.sectionTitle}>Jobs and requests</Text>
+            <Text style={styles.sectionHint}>{pendingOffer?"New offer waiting for review":activeRepair?"You have an active assignment":"All caught up for now"}</Text>
+          </View>
           {pendingOffer ? (
             <View style={styles.offerCard}>
               <View style={styles.offerHeading}>
@@ -454,7 +485,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
+  screen: { flex: 1, backgroundColor: "#F7F9FC" },
   safeArea: { flex: 1 },
   center: { alignItems: "center", justifyContent: "center", gap: 10 },
   content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 30 },
@@ -462,9 +493,18 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   eyebrow: { color: "#1857A6", fontSize: 10, letterSpacing: 1, fontFamily: "Inter_600SemiBold" },
   title: { color: "#102A43", fontSize: 23, lineHeight: 29, fontFamily: "Inter_600SemiBold", marginTop: 6 },
-  subtitle: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4, marginBottom: 22 },
-  logoutButton: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 9, paddingHorizontal: 12, paddingVertical: 8 },
-  logoutText: { color: "#475467", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  subtitle: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4, marginBottom: 19 },
+  welcomeHero:{backgroundColor:"#102A43",borderRadius:23,padding:20,marginBottom:15},
+  welcomeTop:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:10},
+  welcomeIcon:{width:48,height:48,borderRadius:15,backgroundColor:"#286AA7",alignItems:"center",justifyContent:"center"},
+  welcomeBadge:{color:"#A9DCFF",fontSize:10,fontFamily:"Inter_600SemiBold",letterSpacing:0.5},
+  welcomeTitle:{fontFamily:"Inter_600SemiBold",color:"#FFFFFF",fontSize:21,marginTop:18},
+  welcomeBody:{color:"#C8D9EA",fontSize:12,lineHeight:20,marginTop:8},
+  sectionIntro:{marginTop:22,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10},
+  sectionTitle:{fontFamily:"Inter_600SemiBold",fontSize:17,color:"#102A43"},
+  sectionHint:{fontSize:10,color:"#667085",flexShrink:1,textAlign:"right"},
+  logoutButton: { borderWidth: 1, borderColor: "#F2CBC8", backgroundColor:"#FFF5F4", borderRadius: 12, paddingHorizontal: 11, minHeight:42,justifyContent:"center" },
+  logoutText: { color: "#B42318", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   statusCard: { borderWidth: 1, borderColor: "#B8D2F0", backgroundColor: "#F5F9FE", borderRadius: 16, padding: 18 },
   statusLabel: { color: "#667085", fontSize: 9, letterSpacing: 0.8, fontFamily: "Inter_600SemiBold" },
   statusTitle: { color: "#102A43", fontSize: 17, fontFamily: "Inter_600SemiBold", marginTop: 6 },
