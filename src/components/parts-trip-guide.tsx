@@ -42,8 +42,10 @@ export function PartsTripGuide({
   const [ready,setReady]=useState(false);
   const [mapError,setMapError]=useState("");
   const [openError,setOpenError]=useState("");
+  const [navigationOpen,setNavigationOpen]=useState(false);
   const [roadRoute,setRoadRoute]=useState<{
     coordinates:number[][];distanceKm:number;durationMin:number;
+    directions:string[];
   }|null>(null);
   const lastPosition=useRef(ownPosition);
   lastPosition.current=ownPosition;
@@ -79,7 +81,7 @@ export function PartsTripGuide({
         const origin=`${from.longitude},${from.latitude}`;
         const end=`${destination.longitude},${destination.latitude}`;
         const url=(ROUTING_URL.endsWith("/") ? ROUTING_URL.slice(0,-1) : ROUTING_URL)+
-          `/route/v1/driving/${origin};${end}?overview=full&geometries=geojson&steps=false`;
+          `/route/v1/driving/${origin};${end}?overview=full&geometries=geojson&steps=true`;
         const response=await fetch(url,{signal:ctrl.signal});
         if(!response.ok)throw new Error("Routing provider is unavailable");
         const json=await response.json();
@@ -89,6 +91,13 @@ export function PartsTripGuide({
             coordinates:first.geometry.coordinates as number[][],
             distanceKm:Number(first.distance)/1000,
             durationMin:Number(first.duration)/60,
+            directions:(first.legs??[]).flatMap((leg:any)=>leg.steps??[])
+              .map((step:any)=>{
+                const maneuver=step.maneuver??{};
+                const action=[maneuver.type,maneuver.modifier].filter(Boolean).join(" ");
+                const road=step.name?` onto ${step.name}`:"";
+                return `${action||"Continue"}${road} · ${Math.max(0,Math.round(Number(step.distance)||0))} m`;
+              }).slice(0,30),
           });
         }
       }catch{
@@ -113,7 +122,7 @@ export function PartsTripGuide({
       </Text>:null}
     </View>
     <Text style={styles.address} numberOfLines={3}>{destinationLabel||"Destination"}</Text>
-    {start?<View style={styles.mapShell}>
+    {start?<View style={[styles.mapShell,navigationOpen&&{height:430}]}>
       <Map style={StyleSheet.absoluteFill} mapStyle={STYLE_URL} androidView="texture"
         attribution compass logo={false}
         onDidFinishLoadingStyle={()=>setReady(true)}
@@ -166,13 +175,30 @@ export function PartsTripGuide({
       This destination has no saved GPS pin. Ask the dealer or customer to save their precise location. You can still navigate using the written address.
     </Text>:null}
     {mapError?<Text style={styles.error}>{mapError}</Text>:null}
-    {(mode==="rider"||mode==="towing")?<Pressable style={styles.navigate} accessibilityRole="button"
-      onPress={()=>void openNavigation(destination,destinationLabel).catch(e=>
-        setOpenError(e instanceof Error?e.message:"Could not open maps."))}>
-      <SymbolView name={{ios:"arrow.triangle.turn.up.right.diamond.fill",android:"navigation",web:"navigation"} as never}
-        size={18} tintColor="#FFFFFF"/>
-      <Text style={styles.navigateText}>Start turn-by-turn navigation</Text>
-    </Pressable>:null}
+    {(mode==="rider"||mode==="towing")?<>
+      <Pressable style={styles.navigate} accessibilityRole="button"
+        onPress={()=>{setNavigationOpen(true);focus();}}>
+        <SymbolView name={{ios:"map.fill",android:"map",web:"map"} as never}
+          size={18} tintColor="#FFFFFF"/>
+        <Text style={styles.navigateText}>Navigate in AutoAssist</Text>
+      </Pressable>
+      {navigationOpen?<View style={styles.directionPanel}>
+        <Text style={styles.directionTitle}>Driving route and directions</Text>
+        {roadRoute ? <>
+          <Text style={styles.helper}>{roadRoute.distanceKm.toFixed(1)} km · approximately {Math.ceil(roadRoute.durationMin)} min, excluding live traffic.</Text>
+          {roadRoute.directions.map((instruction,index)=><View key={index} style={styles.directionRow}>
+            <Text style={styles.directionNumber}>{index+1}</Text>
+            <Text style={styles.directionText}>{instruction}</Text>
+          </View>)}
+        </> : <Text style={styles.helper}>A road route is not available yet. Connect a routing service for in-app directions.</Text>}
+        <Text style={styles.helper}>This is visual route guidance, not automatic spoken navigation. Keep your attention on the road.</Text>
+      </View>:null}
+      <Pressable style={styles.external} accessibilityRole="button"
+        onPress={()=>void openNavigation(destination,destinationLabel).catch(e=>
+          setOpenError(e instanceof Error?e.message:"Could not open maps."))}>
+        <Text style={styles.externalText}>Open voice navigation in Google Maps</Text>
+      </Pressable>
+    </>:null}
     {openError?<Text style={styles.error}>{openError}</Text>:null}
     <Pressable onPress={()=>void Linking.openURL("https://www.openstreetmap.org/copyright")}
       accessibilityRole="link">
@@ -201,6 +227,14 @@ const styles=StyleSheet.create({
   navigate:{marginTop:15,backgroundColor:BLUE,borderRadius:12,minHeight:48,
     flexDirection:"row",gap:9,justifyContent:"center",alignItems:"center",paddingHorizontal:10},
   navigateText:{color:"#FFFFFF",fontFamily:"Inter_600SemiBold",fontSize:12},
+  directionPanel:{backgroundColor:"#F4F8FD",borderWidth:1,borderColor:"#DCE8F7",
+    borderRadius:13,padding:14,marginTop:9},
+  directionTitle:{fontFamily:"Inter_600SemiBold",color:NAVY,fontSize:13},
+  directionRow:{flexDirection:"row",alignItems:"flex-start",gap:10,marginTop:12},
+  directionNumber:{color:BLUE,fontFamily:"Inter_600SemiBold",fontSize:12,width:20},
+  directionText:{color:NAVY,fontSize:12,lineHeight:19,flex:1},
+  external:{paddingVertical:13,alignItems:"center"},
+  externalText:{color:BLUE,fontFamily:"Inter_600SemiBold",fontSize:12},
   credit:{color:"#577693",fontSize:10,marginTop:10},
   error:{color:"#B42318",fontSize:11,marginTop:8},
 });
