@@ -2,7 +2,8 @@ import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, AppState, Linking, Pressable, StyleSheet, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { useAuth } from "@/context/auth-context";
 import { PartsTripGuide } from "@/components/parts-trip-guide";
