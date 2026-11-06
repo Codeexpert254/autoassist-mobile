@@ -4,6 +4,8 @@ import type { PartsCoordinate } from "@/components/parts-location-picker";
 export type TowStatus = "searching"|"quote_pending"|"assigned"|"arrived"|"secured"|
   "en_route"|"completed_by_agent"|"completed"|"cancelled";
 export type VehicleCategory = "saloon"|"suv"|"light_truck";
+export type TowServiceType = "flatbed"|"wheel_lift"|"recovery";
+export const towServiceLabels:Record<TowServiceType,string>={flatbed:"Flatbed towing",wheel_lift:"Wheel-lift towing",recovery:"Vehicle recovery"};
 export type TowDistanceBand = "0_10"|"10_20"|"20_30"|"30_40"|"40_50"|"above_50";
 export type TowRequest = {
   id:string;motorist_id:string;agent_id:string|null;
@@ -12,6 +14,7 @@ export type TowRequest = {
   vehicle_class:VehicleCategory;vehicle_registration:string;estimated_distance_band:TowDistanceBand;
   estimate_low_kes:number|null;estimate_high_kes:number|null;
   description:string;motorist_phone:string;status:TowStatus;
+  service_type?:TowServiceType;estimated_route_km?:number|null;pricing_version?:number;
   quote_kes:number|null;quoted_at:string|null;quote_approved_at:string|null;
   agent_latitude:number|null;agent_longitude:number|null;agent_position_updated_at:string|null;
   created_at:string;updated_at:string;
@@ -39,6 +42,26 @@ export const distanceLabels:Record<TowDistanceBand,string>={
   "0_10":"0–10 km","10_20":"10–20 km","20_30":"20–30 km",
   "30_40":"30–40 km","40_50":"40–50 km","above_50":"Over 50 km",
 };
+// Nairobi pilot tariff. Distance is a geodesic estimate with a 35% road allowance;
+// actual road routing must replace this before guaranteed road-kilometre billing.
+export function towingEstimatedKm(pickup:PartsCoordinate|null,destination:PartsCoordinate|null){
+  if(!pickup||!destination)return null;
+  const rad=Math.PI/180;
+  const deltaLat=(destination.latitude-pickup.latitude)*rad;
+  const deltaLon=(destination.longitude-pickup.longitude)*rad;
+  const a=Math.sin(deltaLat/2)**2+Math.cos(pickup.latitude*rad)*
+    Math.cos(destination.latitude*rad)*Math.sin(deltaLon/2)**2;
+  const km=6371*2*Math.asin(Math.min(1,Math.sqrt(Math.max(0,a))))*1.35;
+  return Math.max(1,Math.round(km*100)/100);
+}
+export function towingFixedPrice(km:number,vehicle:VehicleCategory,service:TowServiceType){
+  const base=vehicle==="saloon"?4000:vehicle==="suv"?4500:5200;
+  const rate=vehicle==="saloon"?150:vehicle==="suv"?180:220;
+  return Math.ceil((base+Math.max(1,km)*rate+(service==="recovery"?2500:0))/100)*100;
+}
+export function distanceBandForKm(km:number):TowDistanceBand{
+  return km<=10?"0_10":km<=20?"10_20":km<=30?"20_30":km<=40?"30_40":km<=50?"40_50":"above_50";
+}
 export function towIndicativePrice(vehicle:VehicleCategory,band:TowDistanceBand){
   const base:Record<TowDistanceBand,[number,number]|null>={
     "0_10":[5000,6000],"10_20":[6000,9000],"20_30":[8000,12000],
@@ -51,14 +74,14 @@ export function towIndicativePrice(vehicle:VehicleCategory,band:TowDistanceBand)
 export async function requestTow(fields:{
   pickup:PartsCoordinate;pickupText:string;destination:PartsCoordinate|null;
   destinationText:string;vehicle:VehicleCategory;plate:string;band:TowDistanceBand;
-  description:string;phone:string;
+  description:string;phone:string;service:TowServiceType;
 }){
-  const id=await rpc<string>("create_towing_request",{
+  const id=await rpc<string>("create_priced_towing_request",{
     p_pickup_text:fields.pickupText,p_lat:fields.pickup.latitude,p_lon:fields.pickup.longitude,
     p_destination_text:fields.destinationText,
     p_dest_lat:fields.destination?.latitude??null,p_dest_lon:fields.destination?.longitude??null,
     p_vehicle_class:fields.vehicle,p_plate:fields.plate,p_band:fields.band,
-    p_description:fields.description,p_phone:fields.phone,
+    p_description:fields.description,p_phone:fields.phone,p_service_type:fields.service,
   });
   try{await dispatchTow(id);}
   catch(e){console.warn("Towing request created; agent dispatch unavailable",e);}
