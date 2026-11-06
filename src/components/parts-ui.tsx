@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import type { ComponentRef, ReactNode, RefObject } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
+import { useCallback, useState, type ComponentRef, type ReactNode, type RefObject } from "react";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -11,9 +11,15 @@ import { DashboardLogoutButton } from "@/components/dashboard-logout-button";
 export const BLUE="#1857A6",NAVY="#102A43",MUTED="#667085",BORDER="#E4E7EC";
 
 export function PartsPage({title,subtitle,children,back,settings=false,logoutRole,refresh,loading=false,scrollRef}:{
-  title:string;subtitle?:string;children:ReactNode;back?:string;settings?:boolean;logoutRole?:"partsdealer"|"towing"|"rider";refresh?:()=>void;loading?:boolean;scrollRef?:RefObject<ComponentRef<typeof ScrollView>|null>;
+  title:string;subtitle?:string;children:ReactNode;back?:string;settings?:boolean;logoutRole?:"partsdealer"|"towing"|"rider";refresh?:()=>void|Promise<void>;loading?:boolean;scrollRef?:RefObject<ComponentRef<typeof ScrollView>|null>;
 }) {
   const router=useRouter();
+  const [refreshing,setRefreshing]=useState(false);
+  const pullToRefresh=useCallback(async()=>{
+    if(!refresh||refreshing)return;
+    setRefreshing(true);
+    try{await Promise.resolve(refresh());}finally{setRefreshing(false);}
+  },[refresh,refreshing]);
   return <View style={styles.screen}><SafeAreaView style={styles.safe}>
     <View style={styles.header}>
       {back?<Pressable accessibilityRole="button" accessibilityLabel="Go back" style={styles.back}
@@ -24,15 +30,12 @@ export function PartsPage({title,subtitle,children,back,settings=false,logoutRol
         <Text style={styles.title}>{title}</Text>
         {subtitle?<Text style={styles.subtitle}>{subtitle}</Text>:null}
       </View>
-      {refresh?<Pressable accessibilityRole="button" accessibilityLabel="Refresh" onPress={refresh} style={styles.iconBtn}>
-        <SymbolView name={{ios:"arrow.clockwise",android:"refresh",web:"refresh"} as never} tintColor={BLUE} size={21}/>
-      </Pressable>:null}
       {settings?<SettingsButton/>:null}
     </View>
-    {logoutRole?<View style={styles.logoutStrip}>
-      <DashboardLogoutButton role={logoutRole}/>
-    </View>:null}
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      refreshControl={refresh?<RefreshControl refreshing={refreshing} onRefresh={()=>void pullToRefresh()} tintColor={BLUE} colors={[BLUE]}/>:undefined}>
+      {logoutRole?<View style={styles.logoutInline}><DashboardLogoutButton role={logoutRole}/></View>:null}
       {loading?<ActivityIndicator color={BLUE} style={{marginVertical:24}}/>:children}
     </ScrollView>
   </SafeAreaView></View>;
@@ -84,8 +87,7 @@ const styles=StyleSheet.create({
   header:{flexDirection:"row",gap:9,paddingHorizontal:17,paddingVertical:12,alignItems:"center",
     borderBottomWidth:1,borderBottomColor:BORDER,backgroundColor:"#FFFFFF"},
   back:{height:40,width:36,alignItems:"center",justifyContent:"center"},
-  logoutStrip:{flexDirection:"row",justifyContent:"flex-end",backgroundColor:"#FFFFFF",
-    paddingHorizontal:18,paddingBottom:9,borderBottomWidth:1,borderBottomColor:BORDER},
+  logoutInline:{flexDirection:"row",justifyContent:"flex-end",marginBottom:14},
   iconBtn:{height:40,width:40,alignItems:"center",justifyContent:"center"},
   title:{color:NAVY,fontFamily:"Inter_600SemiBold",fontSize:19},
   subtitle:{color:MUTED,fontFamily:"Inter_400Regular",fontSize:11,lineHeight:16,marginTop:3},
