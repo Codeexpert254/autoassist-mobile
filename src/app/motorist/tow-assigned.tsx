@@ -1,7 +1,8 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { PartsTripGuide } from "@/components/parts-trip-guide";
 import { validPartsCoordinate } from "@/components/parts-location-picker";
