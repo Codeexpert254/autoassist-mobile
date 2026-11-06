@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Switch, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { useAuth } from "@/context/auth-context";
 import { Action, Notice, PartsPage, Status, BLUE, NAVY } from "@/components/parts-ui";
