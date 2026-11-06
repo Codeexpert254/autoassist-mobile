@@ -8,10 +8,13 @@ import { useAuth } from "@/context/auth-context";
 import { requireSupabase } from "@/lib/supabase";
 
 type PhotoKind="license"|"insurance"|"truck";
+type TowCapability="flatbed"|"wheel_lift"|"recovery";
+const capabilities:TowCapability[]=["flatbed","wheel_lift","recovery"];
+const capabilityLabels:Record<TowCapability,string>={flatbed:"Flatbed towing",wheel_lift:"Wheel-lift towing",recovery:"Vehicle recovery"};
 type Photo={uri:string;mimeType:string;fileSize?:number};
 export type TowingApplication={
  user_id:string;business_name:string;phone:string;operating_area:string;
- vehicle_type:"flatbed"|"wheel_lift"|"recovery";vehicle_registration:string;
+ vehicle_type:TowCapability;service_types?:TowCapability[];vehicle_registration:string;
  license_number:string;insurance_policy:string;license_image_path:string;
  insurance_image_path:string;truck_image_path:string;
  verification_status:"pending"|"approved"|"rejected";review_note:string|null;
@@ -31,7 +34,7 @@ export default function TowingVerificationForm(){
  const router=useRouter(),{user,profile}=useAuth();
  const [existing,setExisting]=useState<TowingApplication|null>(null);
  const [business,setBusiness]=useState(""),[phone,setPhone]=useState(profile?.phone??"");
- const [area,setArea]=useState(""),[vehicle,setVehicle]=useState<TowingApplication["vehicle_type"]>("flatbed");
+ const [area,setArea]=useState(""),[services,setServices]=useState<TowCapability[]>(["flatbed"]);
  const [plate,setPlate]=useState(""),[licence,setLicence]=useState(""),[insurance,setInsurance]=useState("");
  const [photos,setPhotos]=useState<Partial<Record<PhotoKind,Photo>>>({});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
@@ -43,7 +46,7 @@ export default function TowingVerificationForm(){
      setExisting(item);
      if(item){
        setBusiness(item.business_name);setPhone(item.phone);setArea(item.operating_area);
-       setVehicle(item.vehicle_type);setPlate(item.vehicle_registration);
+       setServices(item.service_types?.length?item.service_types:[item.vehicle_type]);setPlate(item.vehicle_registration);
        setLicence(item.license_number);setInsurance(item.insurance_policy);
      }
    }catch(e){setError(e instanceof Error?e.message:"Unable to load towing application.");}
@@ -97,7 +100,7 @@ export default function TowingVerificationForm(){
      for(const kind of kinds)if(photos[kind.id])paths[kind.id]=await upload(kind.id,photos[kind.id]!);
      const fields={
        business_name:business.trim(),phone:phone.trim(),operating_area:area.trim(),
-       vehicle_type:vehicle,vehicle_registration:plate.trim(),license_number:licence.trim(),
+       vehicle_type:services[0],service_types:services,vehicle_registration:plate.trim(),license_number:licence.trim(),
        insurance_policy:insurance.trim(),license_image_path:paths.license,
        insurance_image_path:paths.insurance,truck_image_path:paths.truck,
      };
@@ -111,6 +114,10 @@ export default function TowingVerificationForm(){
          p_insurance_image_path:fields.insurance_image_path,p_truck_image_path:fields.truck_image_path,
        } as never);
        if(error)throw error;
+       const {error:serviceError}=await c.rpc("set_towing_capabilities" as never,{
+         p_services:services,
+       } as never);
+       if(serviceError)throw serviceError;
      }else{
        const {error}=await c.from("towing_agent_profiles" as never)
          .insert({...fields,user_id:user.id,verification_status:"pending"} as never);
@@ -131,7 +138,7 @@ export default function TowingVerificationForm(){
        <Text style={partStyles.cardTitle}>{existing.business_name}</Text>
        <Status label={existing.verification_status} good={approved}/>
        {underReview?<Notice>Your application is awaiting Super Admin review. Towing jobs remain unavailable until approval.</Notice>:null}
-       {approved?<Notice tone="success">Your towing provider account has been approved.</Notice>:null}
+       {approved?<Notice tone="success">Your towing provider account has been approved. Services: {(existing.service_types?.length?existing.service_types:[existing.vehicle_type]).map(s=>capabilityLabels[s]).join(", ")}.</Notice>:null}
        {existing.verification_status==="rejected"?<Notice tone="error">
          {existing.review_note||"Your application needs corrections before resubmission."}
        </Notice>:null}
@@ -143,12 +150,20 @@ export default function TowingVerificationForm(){
        <Field label="Contact phone number" value={phone} onChangeText={setPhone} keyboardType="phone-pad"/>
        <Field label="Operating area" value={area} onChangeText={setArea}
          placeholder="Nairobi and surrounding counties"/>
-       <Text style={{color:NAVY,fontSize:12,fontFamily:"Inter_600SemiBold",marginTop:15}}>Tow truck type</Text>
-       <View style={[partStyles.row,{marginTop:9}]}>
-         {(["flatbed","wheel_lift","recovery"] as const).map(v=><Pressable key={v}
-           onPress={()=>setVehicle(v)} style={{flex:1,borderColor:BLUE,borderWidth:1,
-             backgroundColor:vehicle===v?BLUE:"#FFFFFF",borderRadius:8,paddingVertical:10,alignItems:"center"}}>
-           <Text style={{color:vehicle===v?"#FFFFFF":BLUE,fontSize:11}}>{v.replace("_"," ")}</Text>
+       <Text style={{color:NAVY,fontSize:12,fontFamily:"Inter_600SemiBold",marginTop:15}}>Services and recovery equipment (choose all you offer)</Text>
+       <Text style={{fontSize:11,color:"#64748B",lineHeight:18,marginTop:6}}>
+         Select every capability your business can actually provide. All services require administrator verification before dispatch.
+       </Text>
+       <View style={[partStyles.row,{marginTop:9,flexWrap:"wrap"}]}>
+         {capabilities.map(v=><Pressable key={v} accessibilityRole="checkbox"
+           accessibilityState={{checked:services.includes(v)}}
+           onPress={()=>setServices(current=>current.includes(v)?
+             current.length>1?current.filter(s=>s!==v):current:[...current,v])}
+           style={{borderColor:BLUE,borderWidth:1,backgroundColor:services.includes(v)?BLUE:"#FFFFFF",
+             borderRadius:9,paddingHorizontal:12,paddingVertical:12,alignItems:"center"}}>
+           <Text style={{color:services.includes(v)?"#FFFFFF":BLUE,fontSize:11}}>
+             {services.includes(v)?"✓ ":""}{capabilityLabels[v]}
+           </Text>
          </Pressable>)}
        </View>
        <Field label="Tow truck registration / number plate" value={plate} onChangeText={setPlate}/>
