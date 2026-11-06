@@ -231,6 +231,7 @@ const styles=StyleSheet.create({
  eyebrow:{fontSize:10,color:BLUE,letterSpacing:1.1,fontFamily:"Inter_600SemiBold"},
  greetingName:{fontSize:22,color:NAVY,fontFamily:"Inter_600SemiBold",marginTop:7},
  subtitle:{fontSize:11,color:"#657990",marginTop:6},
+ serviceHelp:{fontSize:11,color:"#63758B",lineHeight:17,marginTop:7},
  avatar:{height:49,width:49,backgroundColor:"#EDF4FD",borderRadius:16,
   alignItems:"center",justifyContent:"center"},
  hero:{backgroundColor:NAVY,borderRadius:23,padding:20},
