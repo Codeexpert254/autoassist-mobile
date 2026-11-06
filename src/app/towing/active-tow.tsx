@@ -79,11 +79,10 @@ export default function ActiveTowingJob(){
     if(!id||!request||request.status!=="assigned"||request.agent_departed_at||departing.current)return;
     departing.current=true;
     try {
-      const newDeparture=await markTowingDeparture(id);
-      if(newDeparture){
-        void notifyTowMilestone(id,"departed").catch(cause=>
-          console.warn("Customer towing departure push unavailable",cause));
-      }
+      await markTowingDeparture(id);
+      // Safe to retry: the server deduplicates a successfully submitted milestone.
+      void notifyTowMilestone(id,"departed").catch(cause=>
+        console.warn("Customer towing departure push unavailable",cause));
       await load();
     }catch(cause){
       setError(cause instanceof Error?cause.message:"Could not register navigation start.");
