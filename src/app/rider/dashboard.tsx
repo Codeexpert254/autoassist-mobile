@@ -251,7 +251,7 @@ export default function RiderDashboard() {
       subtitle="Your delivery workspace"
       settings
       logoutRole="rider"
-      refresh={() => void load()}
+      refresh={load}
       loading={loading && !rider}
     >
       {profile?.role !== "rider" ? (
