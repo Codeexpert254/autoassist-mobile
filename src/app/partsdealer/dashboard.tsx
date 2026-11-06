@@ -8,6 +8,7 @@ import { Action, Notice, PartsPage, Status, BLUE, NAVY } from "@/components/part
 import { type PartsShop, type PartOrder, type Part, ownShop, shopOrders,
   inventoryFor, updateShop, subscribeShopOrders, money } from "@/services/parts-data";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { startOfferAlert, stopOfferAlert } from "@/services/offer-attention";
 import { setFloatingOffersOnline } from "@/services/floating-offers";
 
 const C={blue:BLUE,navy:NAVY,muted:"#6A7D91",stroke:"#E1E9F2",white:"#FFFFFF",
@@ -69,6 +70,11 @@ export default function PartsDealerDashboard(){
     if(!user||!shop||shop.verification_status!=="approved")return;
     void ensureJobNotifications(user.id).catch(()=>undefined);
   },[user?.id,shop?.id,shop?.verification_status]);
+  useEffect(()=>{
+    if(!popup)return;
+    void startOfferAlert(popup.id,"New spare-parts order","A customer order needs your response.");
+    return()=>stopOfferAlert(popup.id);
+  },[popup?.id]);
   const toggle=async(next:boolean)=>{
     if(!shop||busy)return;setBusy(true);setError("");
     try{
