@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { Action, PartsPage, Notice, BLUE, NAVY } from "@/components/parts-ui";
 import { ensureJobNotifications } from "@/services/push-notifications";
+import { startOfferAlert, stopOfferAlert } from "@/services/offer-attention";
 import {
   type DeliveryLead,
   type RiderProfile,
@@ -216,6 +217,11 @@ export default function RiderDashboard() {
       .catch((cause) => console.warn("Rider push setup unavailable", cause));
   }, [user?.id, rider?.verified, rider?.is_available]);
 
+  useEffect(() => {
+    if (!newPickup || !online) return;
+    void startOfferAlert(newPickup.offer_id, "New delivery request", "A spare-parts delivery is ready for review.");
+    return () => stopOfferAlert(newPickup.offer_id);
+  }, [newPickup?.offer_id, online]);
   const changeAvailability = async (next: boolean) => {
     if (!user || busy || !rider?.verified || onDelivery) return;
     setBusy(true);
