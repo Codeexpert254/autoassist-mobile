@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 
 import { registerDevicePushToken } from "@/services/dispatch-backend";
 import { requireSupabase } from "@/lib/supabase";
+import { ensureAutoAssistNotificationChannels } from "@/services/notification-sounds";
 
 const TOKEN_STORAGE_KEY = "autoassist:devicePushToken";
 
@@ -23,23 +24,7 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
     };
   }
 
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("jobs", {
-      name: "AutoAssist jobs",
-      importance: Notifications.AndroidImportance.HIGH,
-      sound: "default",
-      vibrationPattern: [0, 250, 150, 250],
-    });
-    // A new channel ID ensures Android applies sound/importance configuration
-    // even if an older channel was previously created as silent.
-    await Notifications.setNotificationChannelAsync("incoming-requests-v2", {
-      name: "Incoming service requests",
-      importance: Notifications.AndroidImportance.MAX,
-      sound: "default",
-      vibrationPattern: [0, 250, 150, 250],
-      description: "New matched requests needing an immediate response.",
-    });
-  }
+  await ensureAutoAssistNotificationChannels();
 
   let permissions = await Notifications.getPermissionsAsync();
   if (!permissions.granted) {
