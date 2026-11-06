@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Modal, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
 import { useAuth } from "@/context/auth-context";
 import { getTowingApplication, type TowingApplication } from "@/components/towing-verification-functional";
@@ -25,6 +25,9 @@ export default function TowingDashboard(){
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const seen=useRef(new Set<string>()),fetching=useRef(false);
+  const scrollRef=useRef<ScrollView>(null);
+  const sections=useRef<Record<"active"|"offers"|"completed",number>>({active:0,offers:0,completed:0});
+  const jump=(name:"active"|"offers"|"completed")=>scrollRef.current?.scrollTo({y:Math.max(0,sections.current[name]-12),animated:true});
   const selected=jobs.find(j=>ongoing.includes(j.status));
   const approved=record?.verification_status==="approved";
 
@@ -77,7 +80,7 @@ export default function TowingDashboard(){
   };
   const jobsDone=jobs.filter(j=>j.status==="completed");
   return <PartsPage title="Recovery workspace" subtitle="AutoAssist towing partner" settings
-    refresh={()=>void load()} loading={loading&&!record}>
+    refresh={()=>void load()} loading={loading&&!record} scrollRef={scrollRef}>
     {profile?.role!=="towing"?<Notice tone="error">Sign in as a verified Towing Agent.</Notice>:
     !approved?<View style={styles.verification}>
       <View style={styles.heroIcon}><Icon ios="truck.box.fill" android="local_shipping"
@@ -132,12 +135,19 @@ export default function TowingDashboard(){
         </View>
       </View>
       <View style={styles.metrics}>
-        <View style={styles.metric}><Icon ios="bolt.circle.fill" android="work" size={21}/>
-          <Text style={styles.metricValue}>{selected?1:0}</Text><Text style={styles.metricLabel}>Active job</Text></View>
-        <View style={styles.metric}><Icon ios="bell.badge.fill" android="notifications" size={21}/>
-          <Text style={styles.metricValue}>{offers.length}</Text><Text style={styles.metricLabel}>New offers</Text></View>
-        <View style={styles.metric}><Icon ios="checkmark.circle.fill" android="check_circle" size={21}/>
-          <Text style={styles.metricValue}>{jobsDone.length}</Text><Text style={styles.metricLabel}>Completed</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Jump to active jobs"
+          onPress={()=>jump("active")} style={styles.metric}><Icon ios="bolt.circle.fill" android="work" size={21}/>
+          <Text style={styles.metricValue}>{selected?1:0}</Text><Text style={styles.metricLabel}>Active jobs ↓</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Jump to new offers"
+          onPress={()=>jump("offers")} style={styles.metric}><Icon ios="bell.badge.fill" android="notifications" size={21}/>
+          <Text style={styles.metricValue}>{offers.length}</Text><Text style={styles.metricLabel}>New offers ↓</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Jump to completed jobs"
+          onPress={()=>jump("completed")} style={styles.metric}><Icon ios="checkmark.circle.fill" android="check_circle" size={21}/>
+          <Text style={styles.metricValue}>{jobsDone.length}</Text><Text style={styles.metricLabel}>Completed ↓</Text></Pressable>
+      </View>
+      <View style={styles.section} onLayout={e=>{sections.current.active=e.nativeEvent.layout.y;}}>
+        <Text style={styles.sectionTitle}>Active jobs</Text>
+        {!selected?<Text style={styles.jobDesc}>No active recovery jobs yet.</Text>:null}
       </View>
       {selected?<View style={styles.section}>
         <Text style={styles.sectionTitle}>Current assignment</Text>
@@ -152,7 +162,7 @@ export default function TowingDashboard(){
           <Text style={styles.link}>Continue towing job →</Text>
         </Pressable>
       </View>:null}
-      <View style={styles.section}>
+      <View style={styles.section} onLayout={e=>{sections.current.offers=e.nativeEvent.layout.y;}}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>New towing requests</Text>
           <View style={styles.count}><Text style={styles.countText}>{offers.length}</Text></View>
@@ -174,6 +184,16 @@ export default function TowingDashboard(){
           <Text style={styles.jobDesc}>To: {offer.destination_area}</Text>
           <Text style={styles.link}>Review and quote →</Text>
         </Pressable>)}
+      </View>
+      <View style={styles.section} onLayout={e=>{sections.current.completed=e.nativeEvent.layout.y;}}>
+        <Text style={styles.sectionTitle}>Completed recovery jobs</Text>
+        {jobsDone.length===0?<Text style={styles.jobDesc}>Completed recoveries will appear here.</Text>:
+          jobsDone.map(job=><View key={job.id} style={styles.jobCard}>
+            <Text style={styles.jobLabel}>#{job.id.slice(0,8).toUpperCase()} · COMPLETED</Text>
+            <Text style={styles.jobTitle}>{job.vehicle_registration}</Text>
+            <Text style={styles.jobDesc}>{job.pickup_text} → {job.destination_text}</Text>
+            <Text style={styles.link}>{towMoney(job.quote_kes)}</Text>
+          </View>)}
       </View>
       <View style={styles.account}>
         <Icon ios="checkmark.shield.fill" android="verified_user" color="#13815E" size={23}/>
