@@ -250,6 +250,7 @@ export default function RiderDashboard() {
       title="Rider home"
       subtitle="Your delivery workspace"
       settings
+      logoutRole="rider"
       refresh={() => void load()}
       loading={loading && !rider}
     >
