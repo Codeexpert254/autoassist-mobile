@@ -106,7 +106,7 @@ export default function TowingDashboard(){
         <View style={{flex:1}}>
           <Text style={styles.eyebrow}>VERIFIED RECOVERY PARTNER</Text>
           <Text style={styles.greetingName}>{record.business_name}</Text>
-          <Text style={styles.subtitle}>{record.vehicle_registration} · {record.vehicle_type.replace("_"," ")}</Text>
+          <Text style={styles.subtitle}>{record.vehicle_registration} · {(record.service_types?.length?record.service_types:[record.vehicle_type]).map(type=>type.replace("_"," ")).join(" · ")}</Text>
         </View>
         <View style={styles.avatar}><Icon ios="checkmark.shield.fill" android="verified_user" size={26}/></View>
       </View>
@@ -183,7 +183,7 @@ export default function TowingDashboard(){
           <Text style={styles.jobTitle}>{offer.vehicle_registration} · {offer.vehicle_class}</Text>
           <Text style={styles.jobDesc}>From: {offer.pickup_area}</Text>
           <Text style={styles.jobDesc}>To: {offer.destination_area}</Text>
-          <Text style={styles.link}>Review and quote →</Text>
+          <Text style={styles.link}>Review fixed-fare job →</Text>
         </Pressable>)}
       </View>
       <View style={styles.section} onLayout={e=>{sections.current.completed=e.nativeEvent.layout.y;}}>
@@ -200,7 +200,7 @@ export default function TowingDashboard(){
         <Icon ios="checkmark.shield.fill" android="verified_user" color="#13815E" size={23}/>
         <View style={{flex:1}}>
           <Text style={styles.accountTitle}>Approved towing partner</Text>
-          <Text style={styles.accountText}>Rates are agreed with the Motorist before travel. Payments are not yet collected in-app.</Text>
+          <Text style={styles.accountText}>AutoAssist fixes towing fares before dispatch. Operators cannot negotiate the customer price. In-app collection is not yet active.</Text>
         </View>
       </View>
       <Action label="View verification & business profile" variant="outline"
