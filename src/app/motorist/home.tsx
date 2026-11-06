@@ -38,12 +38,13 @@ export default function Home() {
   const router = useRouter();
   const { backendEnabled, user, profile, signOut, refreshProfile } = useAuth();
   const [refreshing,setRefreshing]=useState(false);
-  const pullRefresh=async()=>{
+  const pullRefresh=()=>{
     if(refreshing)return;
     setRefreshing(true);
-    try{if(backendEnabled)await refreshProfile();}catch(error){
+    setTimeout(()=>setRefreshing(false),1100);
+    if(backendEnabled)void refreshProfile().catch(error=>{
       Alert.alert("Unable to refresh",error instanceof Error?error.message:"Try again.");
-    }finally{setRefreshing(false);}
+    });
   };
   const { state: demoState, logout: demoLogout } = useDemoApp();
   const { state } = useRepairFlow();
