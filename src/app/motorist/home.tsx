@@ -1,9 +1,9 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
@@ -36,7 +36,15 @@ const quickServices = [
 
 export default function Home() {
   const router = useRouter();
-  const { backendEnabled, user, profile, signOut } = useAuth();
+  const { backendEnabled, user, profile, signOut, refreshProfile } = useAuth();
+  const [refreshing,setRefreshing]=useState(false);
+  const pullRefresh=async()=>{
+    if(refreshing)return;
+    setRefreshing(true);
+    try{if(backendEnabled)await refreshProfile();}catch(error){
+      Alert.alert("Unable to refresh",error instanceof Error?error.message:"Try again.");
+    }finally{setRefreshing(false);}
+  };
   const { state: demoState, logout: demoLogout } = useDemoApp();
   const { state } = useRepairFlow();
   const displayName = profile?.full_name || demoState.user.name;
@@ -97,7 +105,8 @@ export default function Home() {
     <View style={styles.homeContainer}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>void pullRefresh()} tintColor="#1857A6" colors={["#1857A6"]}/>}>
         <View style={styles.heading}>
           <Text style={styles.subTitle}>Good afternoon</Text>
           <View style={styles.headerActions}>
