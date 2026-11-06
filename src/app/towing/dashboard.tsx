@@ -204,6 +204,8 @@ export default function TowingDashboard(){
           <Text style={styles.accountText}>AutoAssist fixes towing fares before dispatch. Operators cannot negotiate the customer price. In-app collection is not yet active.</Text>
         </View>
       </View>
+      <Action label="View fares and earnings" variant="outline"
+        onPress={()=>router.push("/earnings")}/>
       <Action label="View verification & business profile" variant="outline"
         onPress={()=>router.push("/towing/verification")}/>
       {error?<Notice tone="error">{error}</Notice>:null}
