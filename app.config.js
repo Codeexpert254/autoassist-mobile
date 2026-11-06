@@ -43,6 +43,7 @@ module.exports = ({ config }) => ({
       ...(Array.isArray(originalPlugins.find(entry => nameOf(entry) === "expo-notifications"))
         ? originalPlugins.find(entry => nameOf(entry) === "expo-notifications")[1] : {}),
       sounds: soundPaths,
+      defaultChannel: "autoassist-updates-v2",
     }],
     // Preserve the single-FCM-service native overlay behavior in clean CI
     // builds as well as local app.json files.
