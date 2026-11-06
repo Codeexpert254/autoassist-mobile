@@ -2,10 +2,11 @@ import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/auth-context";
+import { AppText as Text, useAutoAssistFont } from "@/components/autoassist-font";
 import { requireSupabase } from "@/lib/supabase";
 import { getMechanicProfile } from "@/services/repair-backend";
 import { ownShop } from "@/services/parts-data";
@@ -21,6 +22,7 @@ import {
 
 export default function Settings() {
   const router = useRouter();
+  const { font, setFont } = useAutoAssistFont();
   const { user, profile } = useAuth();
   const isMechanic = Boolean(user && profile?.role === "mechanic");
   const isDealer = Boolean(user && profile?.role === "partsdealer");
@@ -178,6 +180,29 @@ export default function Settings() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          <View style={{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E4E7EC",
+            padding:16,borderRadius:14,marginBottom:14}}>
+            <Text style={{fontSize:16,fontWeight:"600",color:"#102A43"}}>App typography</Text>
+            <Text style={{fontSize:12,color:"#667085",lineHeight:19,marginTop:6}}>
+              Choose a consistent font style. System follows your phone's typeface,
+              while AutoAssist uses Inter throughout the updated service screens.
+            </Text>
+            <View style={{flexDirection:"row",gap:10,marginTop:14}}>
+              {([{value:"system",name:"System font"},{value:"inter",name:"AutoAssist Inter"}] as const)
+                .map(option=><Pressable key={option.value} accessibilityRole="button"
+                  accessibilityState={{selected:font===option.value}}
+                  onPress={()=>setFont(option.value)}
+                  style={{flex:1,minHeight:43,borderRadius:10,borderWidth:1,
+                    borderColor:font===option.value?"#1857A6":"#D0D5DD",
+                    backgroundColor:font===option.value?"#EAF2FD":"#FFFFFF",
+                    justifyContent:"center",alignItems:"center",paddingHorizontal:6}}>
+                  <Text style={{fontSize:11,color:"#102A43",fontWeight:font===option.value?"600":"400"}}>
+                    {option.name}{font===option.value?" ✓":""}
+                  </Text>
+                </Pressable>)}
+            </View>
+          </View>
+
           {overlayRole && Platform.OS === "android" ? (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>{isDealer ? "Floating parts-order alerts" : "Floating job alerts"}</Text>
