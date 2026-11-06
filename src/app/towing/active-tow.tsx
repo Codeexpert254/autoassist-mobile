@@ -9,7 +9,7 @@ import { useAuth } from "@/context/auth-context";
 import { PartsTripGuide } from "@/components/parts-trip-guide";
 import { validPartsCoordinate,type PartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Notice, PartsPage, BLUE, NAVY, Status } from "@/components/parts-ui";
-import { publishTowGPS,towDetails,towMoney,updateTowStatus,type TowRequest,type TowStatus }
+import { markTowingDeparture,notifyTowMilestone,publishTowGPS,towDetails,towMoney,updateTowStatus,type TowRequest,type TowStatus }
   from "@/services/towing-jobs";
 
 const contact=(kind:"call"|"sms",raw:string)=>{
@@ -31,7 +31,7 @@ export default function ActiveTowingJob(){
   const [position,setPosition]=useState<PartsCoordinate|null>(null);
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[gpsError,setGpsError]=useState("");
-  const sending=useRef(0),initialized=useRef(false);
+  const sending=useRef(0),initialized=useRef(false),departing=useRef(false);
   const load=useCallback(async()=>{
     if(!id||!user){setLoading(false);return;}
     try{
@@ -75,10 +75,28 @@ export default function ActiveTowingJob(){
     })();
     return()=>{disposed=true;watcher?.remove();};
   },[id,profile?.role,gpsAllowed,Boolean(request)]));
+  const beginNavigation=async()=>{
+    if(!id||!request||request.status!=="assigned"||request.agent_departed_at||departing.current)return;
+    departing.current=true;
+    try {
+      const newDeparture=await markTowingDeparture(id);
+      if(newDeparture){
+        void notifyTowMilestone(id,"departed").catch(cause=>
+          console.warn("Customer towing departure push unavailable",cause));
+      }
+      await load();
+    }catch(cause){
+      setError(cause instanceof Error?cause.message:"Could not register navigation start.");
+    }finally{departing.current=false;}
+  };
   const stage=async(next:TowStatus)=>{
     if(!id||busy)return;setBusy(true);setError("");
     try{
       await updateTowStatus(id,next);
+      if(next==="arrived"||next==="en_route"||next==="completed_by_agent"){
+        void notifyTowMilestone(id,next).catch(cause=>
+          console.warn("Customer towing progress push unavailable",cause));
+      }
       // Return agent home after delivery; customer still confirms receipt.
       if(next==="completed_by_agent"||next==="completed"){
         router.replace("/towing/dashboard");
@@ -117,7 +135,7 @@ export default function ActiveTowingJob(){
         Your quote was sent. Wait until the Motorist approves it before driving to the breakdown location. You may review the map and contact details meanwhile.
       </Notice>:null}
       {request.status==="assigned"?<Notice tone="success">
-        The Motorist approved your quote. Navigate to their breakdown location, then mark arrival.
+        Tap Navigate in app or Google Maps to let the Motorist know you are on the way. Mark arrival when you reach the pickup.
       </Notice>:null}
       {request.status==="arrived"?<Notice>
         Confirm that the vehicle is correctly secured before starting the towing journey.
@@ -145,7 +163,8 @@ export default function ActiveTowingJob(){
       </View>
       {["quote_pending","assigned","arrived","secured","en_route"].includes(request.status)?
         <PartsTripGuide mode="towing" destination={destination}
-          destinationLabel={destinationText} ownPosition={position}/>:null}
+          destinationLabel={destinationText} ownPosition={position}
+          onNavigate={()=>void beginNavigation()}/>:null}
       {gpsError?<Notice>{gpsError}</Notice>:null}
       {request.status==="assigned"?
         <Action label="I've arrived at the Motorist" busy={busy}
