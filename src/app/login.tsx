@@ -1,3 +1,4 @@
+import "expo-sqlite/localStorage/install";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -42,6 +43,13 @@ export default function Login() {
   const { login: demoLogin, selectRole } = useDemoApp();
   const [loginRole, setLoginRole] = useState<AccountRole>(isAccountRole(requestedRole) ? requestedRole : "motorist");
   const [email, setEmail] = useState(params.email ?? "");
+  useEffect(()=>{
+    if(params.email)return;
+    try {
+      const lastEmail=globalThis.localStorage?.getItem("autoassist:lastLoginEmail");
+      if(lastEmail)setEmail(current=>current||lastEmail);
+    }catch{ /* Optional convenience only; never cache passwords. */ }
+  },[params.email]);
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -107,6 +115,8 @@ export default function Login() {
         );
       }
 
+      try{globalThis.localStorage?.setItem("autoassist:lastLoginEmail",email.trim().toLowerCase());}
+      catch{ /* Email convenience must not block sign-in. */ }
       selectRole(loginRole);
       demoLogin(email);
       routeUser(loginRole);
@@ -201,9 +211,8 @@ export default function Login() {
               autoCapitalize="none"
               autoCorrect={false}
               // Let Android/Samsung and Google Password Manager identify the username.
-              autoComplete="username"
+              autoComplete="email"
               importantForAutofill="yes"
-              textContentType="username"
               value={email}
               onChangeText={(value) => {
                 setEmail(value);
@@ -224,9 +233,8 @@ export default function Login() {
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
-              autoComplete="current-password"
+              autoComplete="password"
               importantForAutofill="yes"
-              textContentType="password"
               value={password}
               onChangeText={setPassword}
             />
@@ -263,6 +271,7 @@ export default function Login() {
             </View>
           ) : null}
 
+          <Text style={styles.autofillHint}>Tap the email or password field to use saved credentials from your phone’s password manager.</Text>
           <Pressable onPress={() => router.push("/forgotpassword")}>
             <Text style={styles.forgotPassword}>Forgot password?</Text>
           </Pressable>
@@ -335,6 +344,7 @@ const styles = StyleSheet.create({
   resendButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 10, backgroundColor: "#FFFFFF" },
   resendButtonDisabled: { borderColor: "#B8D2F0", backgroundColor: "#F2F4F7" },
   resendButtonText: { color: "#1857A6", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  autofillHint:{fontSize:11,lineHeight:17,color:"#667085",marginTop:8,marginBottom:12},
   forgotPassword: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "#344054", alignSelf: "flex-end", marginBottom: 25 },
   loginButton: { width: "100%", height: 48, borderRadius: 12, justifyContent: "center", alignItems: "center", backgroundColor: "#1857A6" },
   loginButtonDisabled: { backgroundColor: "#A9C2DF" },
