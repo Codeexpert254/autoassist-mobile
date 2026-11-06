@@ -52,6 +52,16 @@ ${additions}
   config = withDangerousMod(config,["android",config=>{
     const nativeRoot=config.modRequest.platformProjectRoot;
     for(const flavor of FLAVORS){
+      // Firebase config is supplied separately for each installable Android app.
+      // Keep these local JSON files outside version control and let prebuild copy
+      // them back into the generated native folder.
+      const firebaseConfig=path.join(config.modRequest.projectRoot,
+        "firebase-test",flavor.id,"google-services.json");
+      const targetFolder=path.join(nativeRoot,"app","src",flavor.id);
+      if(fs.existsSync(firebaseConfig)){
+        fs.mkdirSync(targetFolder,{recursive:true});
+        fs.copyFileSync(firebaseConfig,path.join(targetFolder,"google-services.json"));
+      }
       const folder=path.join(nativeRoot,"app","src",flavor.id,"res","values");
       fs.mkdirSync(folder,{recursive:true});
       const escaped=flavor.label.replace(/&/g,"&amp;").replace(/</g,"&lt;");
