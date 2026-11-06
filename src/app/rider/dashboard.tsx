@@ -383,6 +383,8 @@ export default function RiderDashboard() {
                 />
               </View>
 
+              <Action label="View delivery earnings" variant="outline"
+                onPress={()=>router.push("/earnings")}/>
               {active.length > 0 ? (
                 <View style={styles.sectionSpace}>
                   <SectionHeading
