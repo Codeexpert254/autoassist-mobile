@@ -104,10 +104,10 @@ export default function PartsDealerDashboard(){
   const commissionDue=completed.reduce((sum,x)=>sum+Number(x.commission_status==="accrued"?x.commission_kes:0),0);
   const openOrder=(id:string)=>router.push({pathname:"/partsdealer/order-details",params:{orderId:id}});
   const shortcuts=[
-    {title:"Orders",detail:"Manage requests",ios:"bag.fill",android:"shopping_bag",route:"/partsdealer/orders"},
-    {title:"Inventory",detail:"Parts and stock",ios:"shippingbox.fill",android:"inventory_2",route:"/partsdealer/inventory"},
-    {title:"Add item",detail:"List new stock",ios:"plus.circle.fill",android:"add_circle",route:"/partsdealer/add-part"},
-    {title:"My shop",detail:"Store settings",ios:"storefront.fill",android:"storefront",route:"/partsdealer/store-profile"},
+    {title:"Orders",detail:"Review and update sales",ios:"bag.fill",android:"shopping_bag",route:"/partsdealer/orders"},
+    {title:"Inventory",detail:"View stock and prices",ios:"shippingbox.fill",android:"inventory_2",route:"/partsdealer/inventory"},
+    {title:"Add item",detail:"List a spare part",ios:"plus.circle.fill",android:"add_circle",route:"/partsdealer/add-part"},
+    {title:"My shop",detail:"Business details",ios:"storefront.fill",android:"storefront",route:"/partsdealer/store-profile"},
   ];
   return <PartsPage title="Dealer workspace" subtitle="AutoAssist parts marketplace"
     settings logoutRole="partsdealer" loading={loading&&!shop} refresh={()=>void load()}>
@@ -175,6 +175,21 @@ export default function PartsDealerDashboard(){
         <Metric label="Products" value={inventory.length}
           onPress={()=>router.push("/partsdealer/inventory")}
           icon={{ios:"square.stack.3d.up.fill",android:"inventory_2"}}/>
+      </View>
+      <View style={styles.helpCard}>
+        <Text style={styles.helpHeading}>Your next steps</Text>
+        <Text style={styles.helpDescription}>
+          {waiting.length?`You have ${waiting.length} new order${waiting.length===1?"":"s"} to review. Check stock and confirm each request.`:
+            ongoing.length?`${ongoing.length} order${ongoing.length===1?" is":"s are"} being prepared or delivered. Open In progress for updates.`:
+              inventory.length===0?"Start by adding a spare part with its price and available quantity.":
+              "Your shop is set up. Keep stock updated and go online to receive new orders."}
+        </Text>
+        <Pressable accessibilityRole="button" style={styles.helpLink}
+          onPress={()=>router.push(waiting.length?{pathname:"/partsdealer/orders",params:{filter:"new"}}:
+            ongoing.length?{pathname:"/partsdealer/orders",params:{filter:"progress"}}:
+              inventory.length===0?"/partsdealer/add-part":"/partsdealer/inventory")}>
+          <Text style={styles.helpLinkText}>{waiting.length?"Review new orders":ongoing.length?"Check active orders":inventory.length===0?"Add first product":"Manage products"}  →</Text>
+        </Pressable>
       </View>
       <View style={styles.sectionHeading}>
         <Text style={styles.heading}>Manage your shop</Text>
