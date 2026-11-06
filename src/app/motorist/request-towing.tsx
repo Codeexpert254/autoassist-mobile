@@ -2,7 +2,8 @@ import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { useAuth } from "@/context/auth-context";
 import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-location-picker";
