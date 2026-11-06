@@ -19,7 +19,8 @@ export function DashboardLogoutButton({role,onBeforeLogout}:{
       if(onBeforeLogout)await onBeforeLogout();
       // signOut revokes this app installation's push token and clears the session.
       await signOut();
-      router.replace(role?{pathname:"/login",params:{role}}:"/login");
+      if(role)router.replace({pathname:"/login",params:{role}});
+      else router.replace("/login");
     }catch(error){
       Alert.alert("Unable to log out",error instanceof Error?error.message:"Please try again.");
     }finally{setBusy(false);}
