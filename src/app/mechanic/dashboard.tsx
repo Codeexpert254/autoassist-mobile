@@ -174,10 +174,14 @@ export default function Dashboard() {
     }
   };
 
-  const pullRefresh=async()=>{
+  const pullRefresh=()=>{
     if(refreshing)return;
     setRefreshing(true);
-    try{await loadProviderState();}finally{setRefreshing(false);}
+    setTimeout(()=>setRefreshing(false),1100);
+    // Do not keep the pull-to-refresh spinner open while a backend request is pending.
+    void loadProviderState().catch(error=>{
+      console.warn("Could not refresh mechanic jobs",error);
+    });
   };
   const logout = async () => {
     try {
