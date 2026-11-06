@@ -103,6 +103,12 @@ export default function PartsDealerDashboard(){
   const revenue=completed.reduce((sum,x)=>sum+Number(x.subtotal_kes),0);
   const commissionDue=completed.reduce((sum,x)=>sum+Number(x.commission_status==="accrued"?x.commission_kes:0),0);
   const openOrder=(id:string)=>router.push({pathname:"/partsdealer/order-details",params:{orderId:id}});
+  const openNextStep=()=>{
+    if(waiting.length)router.push({pathname:"/partsdealer/orders",params:{filter:"new"}});
+    else if(ongoing.length)router.push({pathname:"/partsdealer/orders",params:{filter:"progress"}});
+    else if(inventory.length===0)router.push("/partsdealer/add-part");
+    else router.push("/partsdealer/inventory");
+  };
   const shortcuts=[
     {title:"Orders",detail:"Review and update sales",ios:"bag.fill",android:"shopping_bag",route:"/partsdealer/orders"},
     {title:"Inventory",detail:"View stock and prices",ios:"shippingbox.fill",android:"inventory_2",route:"/partsdealer/inventory"},
@@ -185,9 +191,7 @@ export default function PartsDealerDashboard(){
               "Your shop is set up. Keep stock updated and go online to receive new orders."}
         </Text>
         <Pressable accessibilityRole="button" style={styles.helpLink}
-          onPress={()=>router.push(waiting.length?{pathname:"/partsdealer/orders",params:{filter:"new"}}:
-            ongoing.length?{pathname:"/partsdealer/orders",params:{filter:"progress"}}:
-              inventory.length===0?"/partsdealer/add-part":"/partsdealer/inventory")}>
+          onPress={openNextStep}>
           <Text style={styles.helpLinkText}>{waiting.length?"Review new orders":ongoing.length?"Check active orders":inventory.length===0?"Add first product":"Manage products"}  →</Text>
         </Pressable>
       </View>
