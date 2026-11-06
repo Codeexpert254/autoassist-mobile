@@ -116,7 +116,7 @@ export default function PartsDealerDashboard(){
     {title:"My shop",detail:"Business details",ios:"storefront.fill",android:"storefront",route:"/partsdealer/store-profile"},
   ];
   return <PartsPage title="Dealer workspace" subtitle="AutoAssist parts marketplace"
-    settings logoutRole="partsdealer" loading={loading&&!shop} refresh={()=>void load()}>
+    settings logoutRole="partsdealer" loading={loading&&!shop} refresh={load}>
     {!eligible?<Notice tone="error">Use a Parts Dealer or approved garage account.</Notice>:
     !shop?<View style={styles.emptyCard}>
       <View style={styles.emptyIcon}><Glyph ios="storefront.fill" android="storefront" size={32}/></View>
