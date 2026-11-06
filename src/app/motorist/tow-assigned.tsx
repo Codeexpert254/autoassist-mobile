@@ -1,8 +1,9 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useState } from "react";
-import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Alert, AppState, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
+import { showLocalTowUpdate } from "@/services/notification-sounds";
 
 import { PartsTripGuide } from "@/components/parts-trip-guide";
 import { validPartsCoordinate } from "@/components/parts-location-picker";
@@ -15,7 +16,7 @@ import {
 
 const stageLabels:Record<string,string>={
   searching:"Finding a tow truck",quote_pending:"Review your quote",
-  assigned:"Tow truck heading to you",arrived:"Tow truck has arrived",
+  assigned:"Tow truck assigned",arrived:"Tow truck has arrived",
   secured:"Your vehicle is secured",en_route:"Towing in progress",
   completed_by_agent:"Confirm tow completion",completed:"Tow completed",
   cancelled:"Request cancelled",
@@ -25,6 +26,8 @@ export default function MotoristTowTracking(){
   const id=Array.isArray(params.requestId)?params.requestId[0]:params.requestId;
   const {user,profile}=useAuth();
   const [request,setRequest]=useState<TowRequest|null>(null);
+  const lastMilestone=useRef<string|null>(null);
+  const trackedRequest=useRef<string|null>(null);
   const [reviewed,setReviewed]=useState(false);
   const [stars,setStars]=useState(0),[comment,setComment]=useState("");
   const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
@@ -34,6 +37,37 @@ export default function MotoristTowTracking(){
     try{
       const item=id?await towDetails(id):(await myTowRequests(user.id))[0]??null;
       if(item&&item.motorist_id!==user.id)throw Error("This towing request is not yours.");
+      if(item){
+        const milestone=item.status==="assigned" && item.agent_departed_at
+          ? "departed" : item.status;
+        // Do not replay historical milestones when opening the screen.
+        if(trackedRequest.current!==item.id){
+          trackedRequest.current=item.id;
+          lastMilestone.current=milestone;
+        }else if(lastMilestone.current!==milestone){
+          lastMilestone.current=milestone;
+          const messages:Record<string,{title:string;body:string}>={
+            departed:{title:"Towing agent is on the way",body:"Your recovery agent has begun travelling to the pickup."},
+            arrived:{title:"Towing agent has arrived",body:"Your tow truck is at the pickup location."},
+            en_route:{title:"Your vehicle is on the move",body:"Your vehicle is now heading to the destination."},
+            completed_by_agent:{title:"Your vehicle has been delivered",body:"Please confirm receipt in AutoAssist after checking your vehicle."},
+          };
+          const message=messages[milestone];
+          if(message&&AppState.currentState==="active"){
+            Alert.alert(message.title,message.body,[{text:"View towing status"}]);
+            // If this device has no registered push token, play a local chime.
+            // Registered devices receive the equivalent remote push instead.
+            let registered=false;
+            try{
+              const raw=globalThis.localStorage?.getItem("autoassist:devicePushToken");
+              const saved=raw?JSON.parse(raw):null;
+              registered=saved?.userId===user.id&&Boolean(saved?.token);
+            }catch{}
+            if(!registered)void showLocalTowUpdate(message.title,message.body,item.id,milestone)
+              .catch(()=>undefined);
+          }
+        }
+      }
       setRequest(item);
       if(item?.status==="completed")setReviewed(Boolean(await myTowReview(item.id)));
       setError("");
@@ -85,7 +119,7 @@ export default function MotoristTowTracking(){
         <View style={styles.heroIcon}><SymbolView name={{ios:"car.side",android:"local_shipping",web:"local_shipping"} as never}
           tintColor="#FFFFFF" size={26}/></View>
         <Text style={styles.heroEyebrow}>TOWING REQUEST #{request.id.slice(0,8).toUpperCase()}</Text>
-        <Text style={styles.heroTitle}>{stageLabels[request.status]??request.status}</Text>
+        <Text style={styles.heroTitle}>{request.status==="assigned"&&request.agent_departed_at?"Towing agent heading to you":stageLabels[request.status]??request.status}</Text>
         <Text style={styles.heroText}>{vehicleNames[request.vehicle_class]} · {request.vehicle_registration}</Text>
         <View style={styles.statusPill}><Status label={request.status} good={request.status==="completed"}/></View>
       </View>
