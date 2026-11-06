@@ -1,7 +1,7 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 import { useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -96,6 +96,8 @@ export default function Home() {
   return (
     <View style={styles.homeContainer}>
       <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
         <View style={styles.heading}>
           <Text style={styles.subTitle}>Good afternoon</Text>
           <View style={styles.headerActions}>
@@ -130,7 +132,13 @@ export default function Home() {
           </Text>
         </Pressable>
 
-        <Text style={styles.helpTitle}>What do you need help with?</Text>
+        <View style={styles.sectionHeading}>
+          <View style={styles.sectionMark}/>
+          <View style={{flex:1}}>
+            <Text style={styles.helpTitle}>How can we help you?</Text>
+            <Text style={styles.sectionSub}>Choose the service you need. We\u2019ll guide you through the steps.</Text>
+          </View>
+        </View>
 
         <Pressable
           style={styles.primaryButton}
@@ -140,6 +148,8 @@ export default function Home() {
             {hasActiveRepair ? "View active connection" : "Describe a car problem"}
           </Text>
         </Pressable>
+
+        <Text style={styles.primaryHint}>Not sure what\u2019s wrong? Describe the symptoms and we\u2019ll help you find a mechanic.</Text>
 
         <View style={styles.quickServicesHeading}>
           <View>
@@ -160,6 +170,21 @@ export default function Home() {
           ))}
         </View>
 
+        <Pressable accessibilityRole="button" accessibilityLabel="Track your towing service"
+          style={({pressed})=>[styles.trackingLink,pressed&&styles.serviceCardPressed]}
+          onPress={()=>router.push("/motorist/tow-assigned")}>
+          <View style={styles.trackingIcon}>
+            <SymbolView name={{ios:"location.fill",android:"location_on",web:"location_on"} as never}
+              size={21} tintColor="#1857A6"/>
+          </View>
+          <View style={{flex:1}}>
+            <Text style={styles.trackingTitle}>Track a tow truck</Text>
+            <Text style={styles.trackingSubtitle}>See your agent's location and vehicle delivery status</Text>
+          </View>
+          <SymbolView name={{ios:"chevron.right",android:"chevron_right",web:"chevron_right"} as never}
+            size={20} tintColor="#1857A6"/>
+        </Pressable>
+
         <Text style={styles.recentActivity}>{hasActiveRepair ? "Active connection" : "Recent activity"}</Text>
         <Pressable style={styles.activityContainer} onPress={() => router.push(hasActiveRepair ? "/motorist/mechanic-assigned" : "/motorist/history")}>
           <Text style={styles.activity}>{state.requestId ? `Repair ${state.requestId}` : "Repair request"}</Text>
@@ -167,6 +192,7 @@ export default function Home() {
           <Text style={styles.activityDetails}>{hasActiveRepair ? "View service connection" : "View jobs & history"}</Text>
         </Pressable>
 
+        </ScrollView>
         <View style={styles.bottomNav}>
           <Nav label="Home" active onPress={() => {}} />
           <Nav label="Jobs" onPress={() => router.push("/motorist/history")} />
@@ -209,23 +235,34 @@ function Nav({ label, active, onPress }: { label: string; active?: boolean; onPr
 }
 
 const styles = StyleSheet.create({
-  homeContainer: { flex: 1, backgroundColor: "#FFFFFF" },
+  homeContainer: { flex: 1, backgroundColor: "#F7F9FC" },
+  scroll:{flex:1},
+  scrollContent:{paddingBottom:30},
   safeArea: { flex: 1, paddingHorizontal: 24 },
-  heading: { marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heading: { marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
   subTitle: { color: "#667085", fontSize: 13, fontFamily: "Inter_400Regular" },
   previewLink: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   logoutButton: { minHeight: 34, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: "#F4C7C3", backgroundColor: "#FFF5F4", flexDirection: "row", alignItems: "center", gap: 6 },
   logoutText: { color: "#B42318", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   title: { color: "#102A43", fontSize: 23, fontFamily: "Inter_600SemiBold", marginTop: 4, marginBottom: 18 },
-  vehicleContainer: { backgroundColor: "#123D76", minHeight: 105, padding: 16, gap: 10, borderRadius: 14, marginBottom: 32 },
+  vehicleContainer: { backgroundColor: "#102A43", minHeight: 122, padding: 20, gap: 12, borderRadius: 22, marginBottom: 26 },
   vehicleInfo: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   vehicle: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   vehicleModel: { color: "#FFFFFF", fontSize: 17, fontFamily: "Inter_600SemiBold" },
   vehicleReg: { color: "#FFFFFF", fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular" },
   vehicleArrow: { width: 10, height: 10, transform: [{ scaleX: -1 }], tintColor: "#FFFFFF" },
-  helpTitle: { color: "#102A43", fontSize: 18, fontFamily: "Inter_600SemiBold", marginBottom: 14 },
-  primaryButton: { height: 48, borderRadius: 12, backgroundColor: "#1857A6", justifyContent: "center", marginBottom: 26 },
+  helpTitle: { color: "#102A43", fontSize: 19, fontFamily: "Inter_600SemiBold" },
+  sectionHeading:{flexDirection:"row",alignItems:"flex-start",gap:11,marginBottom:15},
+  sectionMark:{height:38,width:5,borderRadius:4,backgroundColor:"#1857A6"},
+  sectionSub:{fontSize:12,color:"#667085",lineHeight:19,marginTop:4},
+  primaryButton: { minHeight: 52, borderRadius: 14, backgroundColor: "#1857A6", justifyContent: "center", marginBottom: 8 },
+  primaryHint:{fontSize:11,color:"#667085",lineHeight:18,marginBottom:24},
+  trackingLink:{flexDirection:"row",alignItems:"center",gap:12,backgroundColor:"#EDF5FF",
+    borderColor:"#D6E7FB",borderWidth:1,borderRadius:16,padding:14,marginTop:16},
+  trackingIcon:{width:42,height:42,alignItems:"center",justifyContent:"center",borderRadius:13,backgroundColor:"#FFFFFF"},
+  trackingTitle:{fontSize:13,color:"#102A43",fontFamily:"Inter_600SemiBold"},
+  trackingSubtitle:{fontSize:11,color:"#61748A",lineHeight:16,marginTop:4},
   primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   quickServicesHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
   quickServices: { color: "#102A43", fontSize: 15, fontFamily: "Inter_600SemiBold" },
@@ -262,7 +299,7 @@ const styles = StyleSheet.create({
   activity: { color: "#102A43", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   activityStatus: { color: "#667085", fontSize: 12, fontFamily: "Inter_400Regular" },
   activityDetails: { color: "#1857A6", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  bottomNav: { marginTop: "auto", height: 64, borderTopWidth: 1, borderTopColor: "#E4E7EC", flexDirection: "row", marginHorizontal: -24 },
+  bottomNav: { minHeight: 64, borderTopWidth: 1, borderTopColor: "#E4E7EC", backgroundColor:"#FFFFFF", flexDirection: "row", marginHorizontal: -24 },
   navItem: { flex: 1, alignItems: "center", justifyContent: "center" },
   navText: { color: "#98A2B3", fontFamily: "Inter_400Regular", fontSize: 10 },
   navTextActive: { color: "#1857A6", fontFamily: "Inter_600SemiBold" },
