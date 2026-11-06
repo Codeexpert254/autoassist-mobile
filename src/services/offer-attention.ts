@@ -1,11 +1,12 @@
 import * as Notifications from "expo-notifications";
 import { AppState, Platform } from "react-native";
+import { ensureAutoAssistNotificationChannels, REQUEST_CHANNEL, primaryNotificationSound } from "@/services/notification-sounds";
 
 // Foreground reminders only. Never run an unbounded loop, especially when the
 // provider has already opened/dismissed the offer. OS push handles background.
 const timers = new Map<string, ReturnType<typeof setInterval>>();
 const activeAlerts = new Set<string>();
-const CHANNEL_ID = "incoming-requests-v3";
+const CHANNEL_ID = REQUEST_CHANNEL;
 
 export function stopOfferAlert(key: string) {
   const timer = timers.get(key);
@@ -21,15 +22,7 @@ export async function startOfferAlert(key: string, title: string, body: string) 
   try {
     const permission = await Notifications.getPermissionsAsync();
     if (!permission.granted || !activeAlerts.has(key)) return;
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: "Urgent AutoAssist work offers",
-        importance: Notifications.AndroidImportance.MAX,
-        sound: "default",
-        vibrationPattern: [0, 350, 150, 350],
-        description: "Audible alerts for new work. Change sound and vibration in Android settings.",
-      });
-    }
+    await ensureAutoAssistNotificationChannels();
     if (!activeAlerts.has(key)) return;
     let played = 0;
     const sound = () => {
@@ -40,7 +33,7 @@ export async function startOfferAlert(key: string, title: string, body: string) 
       played++;
       void Notifications.scheduleNotificationAsync({
         content: {
-          title, body, sound: "default",
+          title, body, sound: primaryNotificationSound,
           priority: Notifications.AndroidNotificationPriority.MAX,
         },
         trigger: Platform.OS === "android" ? { channelId: CHANNEL_ID } : null,
