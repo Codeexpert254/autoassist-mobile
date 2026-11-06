@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ComponentRef, useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 
@@ -26,7 +26,7 @@ export default function TowingDashboard(){
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const seen=useRef(new Set<string>()),fetching=useRef(false);
-  const scrollRef=useRef<ScrollView>(null);
+  const scrollRef=useRef<ComponentRef<typeof ScrollView>>(null);
   const sections=useRef<Record<"active"|"offers"|"completed",number>>({active:0,offers:0,completed:0});
   const jump=(name:"active"|"offers"|"completed")=>scrollRef.current?.scrollTo({y:Math.max(0,sections.current[name]-12),animated:true});
   const selected=jobs.find(j=>ongoing.includes(j.status));
