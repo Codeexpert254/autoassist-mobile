@@ -9,20 +9,21 @@ import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-lo
 import { TowDestinationPicker } from "@/components/tow-destination-picker";
 import { Action, Field, Notice, PartsPage, BLUE, NAVY } from "@/components/parts-ui";
 import {
-  distanceLabels,myTowRequests,requestTow,towIndicativePrice,towMoney,vehicleNames,
-  type VehicleCategory,type TowDistanceBand,
+  distanceBandForKm,myTowRequests,requestTow,towingEstimatedKm,towingFixedPrice,towMoney,vehicleNames,towServiceLabels,
+  type VehicleCategory,type TowServiceType,
 } from "@/services/towing-jobs";
 
 const vehicleChoices:VehicleCategory[]=["saloon","suv","light_truck"];
-const bandChoices:TowDistanceBand[]=["0_10","10_20","20_30","30_40","40_50","above_50"];
+const serviceChoices:TowServiceType[]=["flatbed","wheel_lift","recovery"];
 export default function RequestTowing(){
  const router=useRouter(),{user,profile,backendEnabled,loading:authLoading}=useAuth();
  const [pickup,setPickup]=useState<PartsCoordinate|null>(null),[pickupText,setPickupText]=useState("");
  const [destination,setDestination]=useState<PartsCoordinate|null>(null),[destinationText,setDestinationText]=useState("");
- const [vehicle,setVehicle]=useState<VehicleCategory>("saloon"),[band,setBand]=useState<TowDistanceBand>("0_10");
+ const [vehicle,setVehicle]=useState<VehicleCategory>("saloon"),[service,setService]=useState<TowServiceType>("flatbed");
  const [plate,setPlate]=useState(""),[phone,setPhone]=useState(profile?.phone??"");
  const [description,setDescription]=useState(""),[working,setWorking]=useState(false),[error,setError]=useState("");
- const estimate=towIndicativePrice(vehicle,band);
+ const estimatedKm=towingEstimatedKm(pickup,destination);
+ const fixedFare=estimatedKm===null?null:towingFixedPrice(estimatedKm,vehicle,service);
  useEffect(()=>{
    if(!user||profile?.role!=="motorist")return;
    let active=true;
@@ -45,7 +46,8 @@ export default function RequestTowing(){
    try{
      const id=await requestTow({
        pickup,pickupText:pickupText.trim(),destination,destinationText:destinationText.trim(),
-       vehicle,plate:plate.trim(),band,description:description.trim(),phone:phone.trim(),
+       vehicle,plate:plate.trim(),band:distanceBandForKm(estimatedKm??1),service,
+       description:description.trim(),phone:phone.trim(),
      });
      router.replace({pathname:"/motorist/tow-assigned",params:{requestId:id}});
    }catch(cause){setError(cause instanceof Error?cause.message:"Unable to request towing.");}
@@ -87,12 +89,12 @@ export default function RequestTowing(){
        </Pressable>)}
      </View>
      <Field label="Vehicle registration" value={plate} onChangeText={setPlate} placeholder="KXX 123X"/>
-     <Text style={styles.fieldLabel}>Approximate towing distance</Text>
+     <Text style={styles.fieldLabel}>Towing service</Text>
      <View style={styles.choices}>
-       {bandChoices.map(v=><Pressable key={v} accessibilityRole="button"
-         onPress={()=>setBand(v)} style={[styles.choice,v===band&&styles.choiceActive]}>
-         <Text style={[styles.choiceText,v===band&&styles.choiceTextActive]}>
-           {distanceLabels[v]}
+       {serviceChoices.map(s=><Pressable key={s} accessibilityRole="button"
+         onPress={()=>setService(s)} style={[styles.choice,s===service&&styles.choiceActive]}>
+         <Text style={[styles.choiceText,s===service&&styles.choiceTextActive]}>
+           {towServiceLabels[s]}
          </Text>
        </Pressable>)}
      </View>
@@ -100,11 +102,17 @@ export default function RequestTowing(){
      <Field label="Breakdown details (optional)" multiline value={description} onChangeText={setDescription}
        placeholder="What happened? Is the vehicle safe to load?"/>
      <View style={styles.pricing}>
-       <Text style={styles.pricingEyebrow}>INDICATIVE NAIROBI TOWING RANGE</Text>
-       <Text style={styles.price}>
-         {estimate? `${towMoney(estimate[0])} – ${towMoney(estimate[1]).replace("KES ","")}`:"Quote required"}
+       <Text style={styles.pricingEyebrow}>AUTOASSIST FIXED TOWING TARIFF</Text>
+       <Text style={styles.price}>{fixedFare!==null?towMoney(fixedFare):"Select both location pins"}</Text>
+       <Text style={styles.pricingDescription}>
+         {estimatedKm!==null?`Estimated priced distance: ${estimatedKm.toFixed(2)} km. `:""}
+         Base fee plus a fixed rate per estimated kilometre. Saloon: KES 4,000 + 150/km;
+         SUV: KES 4,500 + 180/km; light truck: KES 5,200 + 220/km.
+         Standard vehicle recovery adds KES 2,500. Amount is rounded up to KES 100.
+         The displayed fare is locked when you request a truck; agents cannot negotiate it.
+         Distance uses a GPS-based road allowance, not a verified road route.
+         Additional winching, storage or other specialist work is not included.
        </Text>
-       <Text style={styles.pricingDescription}>Rates depend on distance, vehicle weight, recovery conditions and location. The agent submits a final quote for your approval before travel. No payment is taken now.</Text>
      </View>
      {error?<Notice tone="error">{error}</Notice>:null}
      <Action label="Find an available towing agent" busy={working} disabled={!pickup||!destination}
