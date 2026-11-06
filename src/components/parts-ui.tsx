@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import type { ReactNode, RefObject } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollView as ScrollViewType, type TextInputProps } from "react-native";
+import type { ComponentRef, ReactNode, RefObject } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -10,7 +10,7 @@ import { SettingsButton } from "@/components/settings-button";
 export const BLUE="#1857A6",NAVY="#102A43",MUTED="#667085",BORDER="#E4E7EC";
 
 export function PartsPage({title,subtitle,children,back,settings=false,refresh,loading=false,scrollRef}:{
-  title:string;subtitle?:string;children:ReactNode;back?:string;settings?:boolean;refresh?:()=>void;loading?:boolean;scrollRef?:RefObject<ScrollViewType|null>;
+  title:string;subtitle?:string;children:ReactNode;back?:string;settings?:boolean;refresh?:()=>void;loading?:boolean;scrollRef?:RefObject<ComponentRef<typeof ScrollView>|null>;
 }) {
   const router=useRouter();
   return <View style={styles.screen}><SafeAreaView style={styles.safe}>
