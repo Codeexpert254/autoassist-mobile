@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
-import { StyleSheet, Text as NativeText, type TextProps } from "react-native";
+import { StyleSheet, Text as NativeText, type TextProps, type TextStyle } from "react-native";
 
 export type AutoAssistFont = "system"|"inter";
 const KEY = "autoassist:font-preference";
@@ -24,7 +24,7 @@ export const useAutoAssistFont=()=>useContext(FontContext);
 /** Text primitive for migrated screens: one consistent family per preference. */
 export function AppText(props:TextProps){
   const {font}=useAutoAssistFont();
-  const original=StyleSheet.flatten(props.style)??{};
+  const original:TextStyle=StyleSheet.flatten(props.style)??{};
   const {fontFamily:oldFamily,...style}=original;
   const bold=String(oldFamily??"").includes("600")||
     style.fontWeight==="bold"||style.fontWeight==="600"||style.fontWeight==="700";
