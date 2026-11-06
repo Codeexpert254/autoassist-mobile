@@ -27,15 +27,15 @@ export function PartsPage({title,subtitle,children,back,settings=false,logoutRol
         <SymbolView name={{ios:"chevron.left",android:"arrow_back",web:"arrow_back"} as never} tintColor={NAVY} size={23}/>
       </Pressable>:null}
       <View style={{flex:1}}>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle?<Text style={styles.subtitle}>{subtitle}</Text>:null}
+        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        {subtitle?<Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>:null}
       </View>
       {settings?<SettingsButton/>:null}
+      {logoutRole?<DashboardLogoutButton role={logoutRole} compact/>:null}
     </View>
     <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       refreshControl={refresh?<RefreshControl refreshing={refreshing} onRefresh={()=>void pullToRefresh()} tintColor={BLUE} colors={[BLUE]}/>:undefined}>
-      {logoutRole?<View style={styles.logoutInline}><DashboardLogoutButton role={logoutRole}/></View>:null}
       {loading?<ActivityIndicator color={BLUE} style={{marginVertical:24}}/>:children}
     </ScrollView>
   </SafeAreaView></View>;
@@ -87,7 +87,6 @@ const styles=StyleSheet.create({
   header:{flexDirection:"row",gap:9,paddingHorizontal:17,paddingVertical:12,alignItems:"center",
     borderBottomWidth:1,borderBottomColor:BORDER,backgroundColor:"#FFFFFF"},
   back:{height:40,width:36,alignItems:"center",justifyContent:"center"},
-  logoutInline:{flexDirection:"row",justifyContent:"flex-end",marginBottom:14},
   iconBtn:{height:40,width:40,alignItems:"center",justifyContent:"center"},
   title:{color:NAVY,fontFamily:"Inter_600SemiBold",fontSize:19},
   subtitle:{color:MUTED,fontFamily:"Inter_400Regular",fontSize:11,lineHeight:16,marginTop:3},
