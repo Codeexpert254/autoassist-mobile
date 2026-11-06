@@ -17,12 +17,14 @@ const C={blue:BLUE,navy:NAVY,muted:"#6A7D91",stroke:"#E1E9F2",white:"#FFFFFF",
 function Glyph({ios,android,size=21,color=BLUE}:{ios:string;android:string;size?:number;color?:string}){
   return <SymbolView name={{ios,android,web:android} as never} size={size} tintColor={color}/>;
 }
-function Metric({label,value,icon}:{label:string;value:string|number;icon:{ios:string;android:string}}){
-  return <View style={styles.metric}>
+function Metric({label,value,icon,onPress}:{label:string;value:string|number;icon:{ios:string;android:string};onPress:()=>void}){
+  return <Pressable accessibilityRole="button" accessibilityLabel={`View ${label.toLowerCase()}`}
+    accessibilityHint="Opens the matching dealer workspace"
+    onPress={onPress} style={({pressed})=>[styles.metric,pressed&&styles.metricPressed]}>
     <View style={styles.metricIcon}><Glyph {...icon} size={18}/></View>
     <Text style={styles.metricValue}>{value}</Text>
     <Text style={styles.metricLabel}>{label}</Text>
-  </View>;
+  </Pressable>;
 }
 const labelStatus=(status:string)=>({
   pending_dealer:"New order",accepted:"Preparing",ready_for_pickup:"Finding rider",
@@ -165,10 +167,13 @@ export default function PartsDealerDashboard(){
       </Notice>:null}
       <View style={styles.metrics}>
         <Metric label="New orders" value={waiting.length}
+          onPress={()=>router.push({pathname:"/partsdealer/orders",params:{filter:"new"}})}
           icon={{ios:"bell.badge.fill",android:"notifications_active"}}/>
         <Metric label="In progress" value={ongoing.length}
+          onPress={()=>router.push({pathname:"/partsdealer/orders",params:{filter:"progress"}})}
           icon={{ios:"shippingbox.fill",android:"local_shipping"}}/>
         <Metric label="Products" value={inventory.length}
+          onPress={()=>router.push("/partsdealer/inventory")}
           icon={{ios:"square.stack.3d.up.fill",android:"inventory_2"}}/>
       </View>
       <View style={styles.sectionHeading}>
@@ -261,6 +266,7 @@ const styles=StyleSheet.create({
  metrics:{flexDirection:"row",gap:9,marginTop:18},
  metric:{flex:1,backgroundColor:C.white,borderRadius:16,borderWidth:1,
   borderColor:C.stroke,paddingHorizontal:12,paddingVertical:14},
+ metricPressed:{opacity:0.78,transform:[{scale:0.98}]},
  metricIcon:{height:34,width:34,borderRadius:11,backgroundColor:C.sky,
   justifyContent:"center",alignItems:"center"},
  metricValue:{fontFamily:"Inter_600SemiBold",color:NAVY,fontSize:25,marginTop:11},
