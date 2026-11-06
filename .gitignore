@@ -43,3 +43,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Local Firebase app configurations for separately installed test flavors
+/firebase-test/
