@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import type { ReactNode, RefObject } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollView as ScrollViewType, type TextInputProps } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollView as ScrollViewType, type TextInputProps } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { SettingsButton } from "@/components/settings-button";
