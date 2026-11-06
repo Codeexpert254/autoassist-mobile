@@ -4,15 +4,15 @@ const path = require("node:path");
 // Supabase/EAS IDs, native overlay plugin) intact. No map key is needed.
 const base = require("./app.json").expo;
 const originalPlugins = base.plugins ?? [];
-// Use local custom chimes when assets/notifications/default(.wav/.mp3) and
-// default1(.wav/.mp3) have been copied into this worktree. Otherwise use
+// Use local custom chimes when assets/notifications/autoassist_alert(.wav/.mp3) and
+// autoassist_alert_backup(.wav/.mp3) have been copied into this worktree. Otherwise use
 // the Android/iOS system notification sound without breaking CI.
 const folder = path.join(__dirname, "assets", "notifications");
 const available = fs.existsSync(folder) ? fs.readdirSync(folder) : [];
 const findSound = stem => available.find(name =>
   new RegExp("^" + stem + "\\.(wav|mp3|aiff)$", "i").test(name)) || null;
-const primarySound = findSound("default");
-const backupSound = findSound("default1");
+const primarySound = findSound("autoassist_alert");
+const backupSound = findSound("autoassist_alert_backup");
 const soundPaths = [...new Set([primarySound, backupSound].filter(Boolean))]
   .map(name => "./assets/notifications/" + name);
 
