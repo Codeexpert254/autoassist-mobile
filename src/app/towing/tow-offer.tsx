@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Action, Notice, PartsPage, BLUE, NAVY } from "@/components/parts-ui";
 import { useAuth } from "@/context/auth-context";
@@ -12,7 +12,6 @@ export default function TowingOfferPage(){
   const offerId=Array.isArray(params.offerId)?params.offerId[0]:params.offerId;
   const {profile}=useAuth();
   const [offer,setOffer]=useState<TowOffer|null>(null);
-  const [quote,setQuote]=useState("");
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState("");
   useEffect(()=>{
     let alive=true;
@@ -20,20 +19,16 @@ export default function TowingOfferPage(){
       if(!alive)return;
       const item=list.find(x=>x.offer_id===offerId)??null;
       setOffer(item);
-      if(item?.estimate_high_kes)setQuote(String(item.estimate_high_kes));
     }).catch(e=>{if(alive)setError(e instanceof Error?e.message:"Unable to load offer.");})
       .finally(()=>{if(alive)setLoading(false);});
     return()=>{alive=false;};
   },[offerId]);
   const decide=async(accept:boolean)=>{
     if(!offer||busy)return;
-    const amount=Number(quote.trim());
-    if(accept&&(!Number.isInteger(amount)||amount<1000||amount>250000)){
-      setError("Enter your total confirmed service price in KES (1,000–250,000).");return;}
     setBusy(true);setError("");
     try{
-      const result=await respondToTow(offer.offer_id,accept,accept?amount:undefined);
-      if(accept&&result==="quote_pending")
+      const result=await respondToTow(offer.offer_id,accept);
+      if(accept&&result==="assigned")
         router.replace({pathname:"/towing/active-tow",params:{requestId:offer.request_id}});
       else router.replace("/towing/dashboard");
     }catch(e){setError(e instanceof Error?e.message:"Unable to respond to towing offer.");}
@@ -59,19 +54,11 @@ export default function TowingOfferPage(){
         <Text style={styles.address}>{offer.destination_area}</Text>
         {offer.issue_notes?<><Text style={[styles.label,{marginTop:18}]}>ROAD CONDITION / ISSUE</Text>
           <Text style={styles.address}>{offer.issue_notes}</Text></>:null}
-        <Text style={[styles.label,{marginTop:18}]}>CUSTOMER'S INDICATIVE RANGE</Text>
-        <Text style={styles.price}>{offer.estimate_low_kes!=null&&offer.estimate_high_kes!=null?
-          `${towMoney(offer.estimate_low_kes)} – ${towMoney(offer.estimate_high_kes).replace("KES ","")}`:"Long distance · custom quote"}</Text>
-        <Text style={styles.small}>This is not the final agreed price. Recovery type, distance and conditions may change the quote.</Text>
+        <Text style={[styles.label,{marginTop:18}]}>AUTOASSIST FIXED TOWING FARE</Text>
+        <Text style={styles.price}>{towMoney(offer.estimate_low_kes)}</Text>
+        <Text style={styles.small}>The motorist sees this same non-negotiable price. Accept only if you can deliver the service safely.</Text>
       </View>
-      <View style={styles.card}>
-        <Text style={styles.label}>YOUR TOTAL TOWING PRICE (KES)</Text>
-        <TextInput value={quote} onChangeText={setQuote} keyboardType="number-pad"
-          placeholder="e.g. 6000" placeholderTextColor="#9EABBC"
-          style={styles.field}/>
-        <Notice>The Motorist must approve your exact quote before you begin travel. The quote is visible in their app, and you cannot change it after approval.</Notice>
-      </View>
-      <Action label="Accept and send price to Motorist" onPress={()=>void decide(true)} busy={busy}/>
+      <Action label="Accept towing assignment" onPress={()=>void decide(true)} busy={busy}/>
       <Action label="Decline request" onPress={()=>void decide(false)} disabled={busy} variant="outline"/>
       {error?<Notice tone="error">{error}</Notice>:null}
       <Text style={styles.fine}>Only accept if you can safely recover this vehicle and reach the service area.</Text>
