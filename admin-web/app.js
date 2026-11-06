@@ -82,6 +82,8 @@ function showAdmin() {
   roleBadge.textContent = String(state.role ?? "admin").replaceAll("_", " ");
   const sandboxNav = document.querySelector("#sandbox-nav");
   if (sandboxNav) sandboxNav.style.display = state.role === "super_admin" ? "" : "none";
+  const financeNav=document.querySelector("#marketplace-nav");
+  if(financeNav)financeNav.style.display=state.role==="super_admin"?"":"none";
 }
 
 function setLoading(message = "Loading…") {
@@ -159,6 +161,7 @@ async function navigate(section) {
     jobs: "Live repair jobs",
     orders: "Orders",
     payments: "Connection payments",
+    marketplace: "Marketplace finance",
     sandbox: "Sandbox payment testing",
     support: "Support & disputes",
     analytics: "Analytics",
@@ -172,6 +175,7 @@ async function navigate(section) {
     if (section === "users") return await renderUsers();
     if (section === "jobs") return await renderJobs();
     if (section === "payments") return await renderPayments();
+    if (section === "marketplace" && state.role==="super_admin") return await renderMarketplaceFinance();
     if (section === "sandbox" && state.role === "super_admin") return await renderSandboxTesting();
     if (section === "analytics") return await renderAnalytics();
     if (section === "settings") return renderSettings();
@@ -512,6 +516,63 @@ function renderRequestCards(items) {
 function renderRequestTable(items) {
   if (!items.length) return `<div class="empty">No repair requests yet.</div>`;
   return `<div class="table-wrap"><table><thead><tr><th>Request</th><th>Motorist</th><th>Mechanic</th><th>Problem</th><th>Location</th><th>Status</th><th>Created</th></tr></thead><tbody>${items.map((item) => `<tr><td>${escapeHtml(String(item.id).slice(0,8))}</td><td>${escapeHtml(item.motorist?.full_name || item.motorist_id)}</td><td>${escapeHtml(item.mechanic?.full_name || "Unassigned")}</td><td>${escapeHtml(item.symptom || item.description)}</td><td>${escapeHtml(item.location_text || "—")}</td><td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td><td>${escapeHtml(formatDate(item.created_at))}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+async function renderMarketplaceFinance(){
+  const data=await invoke("marketplace-finance-admin",{action:"summary"});
+  const policy=data.policy??{};
+  const m=data.summary??{};
+  const payments=data.payments??[];
+  const payouts=data.payouts??[];
+  content.innerHTML=`
+    <div class="panel">
+      <div class="panel-header"><div><h3 class="panel-title">Marketplace settlement control</h3>
+        <p class="muted">Restricted, read-only pilot ledger. Money never moves from this screen.</p>
+      </div></div>
+      <div class="notice warning">M-PESA marketplace collection:
+        <strong>${policy.collection_enabled?"ENABLED":"DISABLED"}</strong>.
+        Automatic B2C payouts: <strong>${policy.payouts_enabled?"ENABLED":"DISABLED"}</strong>.
+        Cash fallback: <strong>${policy.cash_fallback_enabled?"ENABLED":"DISABLED"}</strong>.
+        Do not interpret job completion as payment proof.</div>
+      <div class="metric-grid">
+        ${metric("Confirmed customer receipts",formatKES(m.confirmedGrossKes??0),`${m.verifiedPaymentCount??0} verified payments`)}
+        ${metric("Commission from confirmed receipts",formatKES(m.recordedCommissionKes??0),"Before provider fees and taxes")}
+        ${metric("Confirmed payouts",formatKES(m.actualPayoutKes??0),"M-PESA B2C payout verification required")}
+        ${metric("Payouts awaiting processing",m.pendingPayoutCount??0,"No automatic disbursements")}
+      </div>
+      <div class="info-grid" style="margin-top:14px">
+        ${info("Parts seller commission",(policy.parts_percent??10)+"%")}
+        ${info("Towing partner commission",(policy.towing_percent??10)+"%")}
+        ${info("Rider commission",(policy.rider_percent??0)+"%")}
+        ${info("Pilot delivery pricing",formatKES(policy.rider_base_kes??150)+" + "+formatKES(policy.rider_per_km_kes??35)+"/km")}
+      </div>
+    </div>
+    <div class="panel"><h3 class="panel-title">Marketplace customer payment records</h3>
+      ${payments.length?`<div class="table-wrap"><table>
+        <thead><tr><th>Reference</th><th>Service</th><th>Amount</th><th>Commission</th><th>Status</th><th>Provider</th><th>Created</th></tr></thead>
+        <tbody>${payments.map(p=>`<tr>
+          <td>${escapeHtml(String(p.origin_id).slice(0,8))}</td>
+          <td>${escapeHtml(p.origin_kind)}</td>
+          <td>${escapeHtml(formatKES(p.amount_kes))}</td>
+          <td>${escapeHtml(formatKES(p.commission_kes))}</td>
+          <td><span class="status ${statusClass(p.status)}">${escapeHtml(p.status)}</span></td>
+          <td>${escapeHtml(p.provider)}</td>
+          <td>${escapeHtml(formatDate(p.created_at))}</td>
+        </tr>`).join("")}</tbody></table></div>`:
+        '<div class="empty">No verified marketplace payments have been recorded. Collection is not connected.</div>'}
+    </div>
+    <div class="panel"><h3 class="panel-title">Provider and rider payouts</h3>
+      ${payouts.length?`<div class="table-wrap"><table>
+        <thead><tr><th>Payment</th><th>Role</th><th>Amount</th><th>Status</th><th>Paid at</th></tr></thead>
+        <tbody>${payouts.map(p=>`<tr>
+          <td>${escapeHtml(String(p.payment_id).slice(0,8))}</td>
+          <td>${escapeHtml(p.beneficiary_role)}</td>
+          <td>${escapeHtml(formatKES(p.amount_kes))}</td>
+          <td><span class="status ${statusClass(p.status)}">${escapeHtml(p.status)}</span></td>
+          <td>${escapeHtml(formatDate(p.paid_at))}</td>
+        </tr>`).join("")}</tbody></table></div>`:
+        '<div class="empty">No provider or rider payouts yet. Disbursements remain disabled.</div>'}
+    </div>`;
 }
 
 async function renderPayments() {
