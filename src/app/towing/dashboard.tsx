@@ -81,7 +81,7 @@ export default function TowingDashboard(){
   };
   const jobsDone=jobs.filter(j=>j.status==="completed");
   return <PartsPage title="Recovery workspace" subtitle="AutoAssist towing partner" settings logoutRole="towing"
-    refresh={()=>void load()} loading={loading&&!record} scrollRef={scrollRef}>
+    refresh={load} loading={loading&&!record} scrollRef={scrollRef}>
     {profile?.role!=="towing"?<Notice tone="error">Sign in as a verified Towing Agent.</Notice>:
     !approved?<View style={styles.verification}>
       <View style={styles.heroIcon}><Icon ios="truck.box.fill" android="local_shipping"
@@ -107,6 +107,7 @@ export default function TowingDashboard(){
           <Text style={styles.eyebrow}>VERIFIED RECOVERY PARTNER</Text>
           <Text style={styles.greetingName}>{record.business_name}</Text>
           <Text style={styles.subtitle}>{record.vehicle_registration} · {(record.service_types?.length?record.service_types:[record.vehicle_type]).map(type=>type.replace("_"," ")).join(" · ")}</Text>
+          <Text style={styles.serviceHelp}>Only these verified service types are eligible for matching, even when your status is Online.</Text>
         </View>
         <View style={styles.avatar}><Icon ios="checkmark.shield.fill" android="verified_user" size={26}/></View>
       </View>
