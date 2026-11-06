@@ -6,9 +6,10 @@ import { AppText as Text } from "@/components/autoassist-font";
 import { useAuth } from "@/context/auth-context";
 
 /** A consistent, accessible sign-out action for role-specific dashboards. */
-export function DashboardLogoutButton({role,onBeforeLogout}:{
+export function DashboardLogoutButton({role,onBeforeLogout,compact=false}:{
   role?:"motorist"|"mechanic"|"partsdealer"|"towing"|"rider";
   onBeforeLogout?:()=>Promise<void>|void;
+  compact?:boolean;
 }) {
   const {signOut}=useAuth(),router=useRouter();
   const [busy,setBusy]=useState(false);
@@ -34,7 +35,7 @@ export function DashboardLogoutButton({role,onBeforeLogout}:{
       "You can sign back in whenever you need to.",
       [{text:"Stay signed in",style:"cancel"},
        {text:"Log out",style:"destructive",onPress:()=>void perform()}])}
-    style={({pressed})=>[styles.button,(pressed||busy)&&styles.pressed]}>
+    style={({pressed})=>[styles.button,compact&&styles.compact,(pressed||busy)&&styles.pressed]}>
     {busy?<ActivityIndicator color="#B42318" size="small"/>:
       <SymbolView name={{ios:"rectangle.portrait.and.arrow.right",android:"logout",web:"logout"} as never}
         size={17} tintColor="#B42318"/>}
@@ -46,5 +47,6 @@ const styles=StyleSheet.create({
     minHeight:42,paddingHorizontal:11,borderRadius:12,backgroundColor:"#FFF5F4",
     borderColor:"#F2CBC8",borderWidth:1},
   label:{fontFamily:"Inter_600SemiBold",color:"#B42318",fontSize:12},
+  compact:{paddingHorizontal:9,minHeight:40},
   pressed:{opacity:0.7},
 });
