@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { useAuth } from "@/context/auth-context";
 import { getTowingApplication, type TowingApplication } from "@/components/towing-verification-functional";
