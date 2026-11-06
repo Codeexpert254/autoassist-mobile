@@ -1,7 +1,8 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 import { useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
