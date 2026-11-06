@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 import { useAuth } from "@/context/auth-context";
 import { PartsLocationPicker, type PartsCoordinate } from "@/components/parts-location-picker";
 import { Action, Field, Notice, PartsPage, Section } from "@/components/parts-ui";
