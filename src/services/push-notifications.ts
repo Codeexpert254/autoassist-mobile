@@ -27,6 +27,7 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
     await Notifications.setNotificationChannelAsync("jobs", {
       name: "AutoAssist jobs",
       importance: Notifications.AndroidImportance.HIGH,
+      sound: "default",
       vibrationPattern: [0, 250, 150, 250],
     });
     // A new channel ID ensures Android applies sound/importance configuration
@@ -34,6 +35,7 @@ export async function ensureJobNotifications(userId: string): Promise<PushRegist
     await Notifications.setNotificationChannelAsync("incoming-requests-v2", {
       name: "Incoming service requests",
       importance: Notifications.AndroidImportance.MAX,
+      sound: "default",
       vibrationPattern: [0, 250, 150, 250],
       description: "New matched requests needing an immediate response.",
     });
