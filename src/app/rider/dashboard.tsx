@@ -7,9 +7,9 @@ import {
   Pressable,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { useAuth } from "@/context/auth-context";
 import { Action, PartsPage, Notice, BLUE, NAVY } from "@/components/parts-ui";
