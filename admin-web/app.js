@@ -296,7 +296,7 @@ function providerInfoRows(role, record, profile) {
   return [
     ["Business / operator",record.business_name],
     ["Account holder",profile?.full_name],["Phone",record.phone],
-    ["Operating area",record.operating_area],["Tow truck type",record.vehicle_type],
+    ["Operating area",record.operating_area],["Services offered",Array.isArray(record.service_types) && record.service_types.length ? record.service_types.map(s => s.replaceAll("_"," ")).join(", ") : record.vehicle_type],["Primary tow truck type",record.vehicle_type],
     ["Truck registration",record.vehicle_registration],
     ["Operating licence",record.license_number],
     ["Insurance policy",record.insurance_policy],
