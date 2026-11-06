@@ -55,7 +55,7 @@ Deno.serve(async(req:Request)=>{
       .eq("user_id",riderId).eq("enabled",true);
     const messages=(tokens??[]).map((token:{expo_push_token:string})=>({
       to:token.expo_push_token,sound:"default",priority:"high",
-      channelId:"incoming-requests-v2",ttl:120,
+      channelId:"autoassist-offers-v4",ttl:120,
       title:"New spare-parts pickup",
       body:"A verified parts dealer has an order ready for collection.",
       data:{type:"parts_rider_offer",route:"/rider/delivery-offer",
