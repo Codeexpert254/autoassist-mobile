@@ -46,7 +46,7 @@ Deno.serve(async(req:Request)=>{
       .select("expo_push_token").eq("user_id",agentId).eq("enabled",true);
     const messages=(tokens??[]).map((t:{expo_push_token:string})=>({
       to:t.expo_push_token,sound:"default",priority:"high",
-      channelId:"incoming-requests-v2",ttl:120,
+      channelId:"autoassist-offers-v4",ttl:120,
       title:"New AutoAssist towing request",
       body:"A Motorist needs roadside towing. Open AutoAssist to review the offer.",
       data:{type:"towing_offer",route:"/towing/tow-offer",requestId,offerId},
