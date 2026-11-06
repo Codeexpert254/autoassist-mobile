@@ -200,6 +200,10 @@ export default function Login() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              // Let Android/Samsung and Google Password Manager identify the username.
+              autoComplete="username"
+              importantForAutofill="yes"
+              textContentType="username"
               value={email}
               onChangeText={(value) => {
                 setEmail(value);
@@ -219,6 +223,10 @@ export default function Login() {
               placeholderTextColor="#667085"
               secureTextEntry
               autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="current-password"
+              importantForAutofill="yes"
+              textContentType="password"
               value={password}
               onChangeText={setPassword}
             />
