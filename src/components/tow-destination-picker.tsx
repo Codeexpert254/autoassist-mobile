@@ -2,7 +2,8 @@ import * as Location from "expo-location";
 import { Camera, Map, Marker, type CameraRef } from "@maplibre/maplibre-react-native";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { AppText as Text } from "@/components/autoassist-font";
 
 import { validPartsCoordinate, type PartsCoordinate } from "@/components/parts-location-picker";
 import { BLUE, NAVY } from "@/components/parts-ui";
