@@ -17,6 +17,7 @@ export type TowRequest = {
   service_type?:TowServiceType;estimated_route_km?:number|null;pricing_version?:number;
   quote_kes:number|null;quoted_at:string|null;quote_approved_at:string|null;
   agent_latitude:number|null;agent_longitude:number|null;agent_position_updated_at:string|null;
+  agent_departed_at?:string|null;
   created_at:string;updated_at:string;
 };
 export type TowOffer = {
@@ -128,6 +129,18 @@ export const respondToTow=(offerId:string,accept:boolean,quoteKes?:number)=>
     p_quote_kes:quoteKes??null});
 export const approveTowQuote=(id:string,approved:boolean)=>
   rpc<string>("approve_towing_quote",{p_request_id:id,p_approve:approved});
+export async function markTowingDeparture(id:string):Promise<boolean>{
+  return rpc<boolean>("mark_towing_departure",{p_request_id:id});
+}
+export async function notifyTowMilestone(
+  requestId:string,eventName:"departed"|"arrived"|"en_route"|"completed_by_agent",
+):Promise<void>{
+  const {data,error}=await client().functions.invoke("towing-status-alert",{
+    body:{requestId,eventName},
+  });
+  if(error)throw error;
+  if(data?.error)throw new Error(String(data.error));
+}
 export const updateTowStatus=(id:string,status:TowStatus)=>
   rpc<string>("update_towing_job",{p_request_id:id,p_next_status:status});
 export const confirmTowComplete=(id:string)=>
