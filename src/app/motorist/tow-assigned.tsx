@@ -11,7 +11,7 @@ import { Action, Notice, PartsPage, Status, BLUE, NAVY } from "@/components/part
 import { useAuth } from "@/context/auth-context";
 import {
   approveTowQuote,cancelTow,confirmTowComplete,dispatchTow,myTowRequests,
-  myTowReview,rateTow,towDetails,towMoney,vehicleNames,type TowRequest,
+  myTowReview,rateTow,towDetails,towMoney,vehicleNames,towServiceLabels,type TowRequest,
 } from "@/services/towing-jobs";
 
 const stageLabels:Record<string,string>={
@@ -32,6 +32,7 @@ export default function MotoristTowTracking(){
   const [stars,setStars]=useState(0),[comment,setComment]=useState("");
   const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
   const [error,setError]=useState(""),[info,setInfo]=useState("");
+  const nextAutoMatch=useRef(0);
   const load=useCallback(async()=>{
     if(!user){setLoading(false);return;}
     try{
@@ -77,13 +78,27 @@ export default function MotoristTowTracking(){
   useFocusEffect(useCallback(()=>{
     void load();const t=setInterval(()=>void load(),7000);return()=>clearInterval(t);
   },[load]));
+  // A request can remain unmatched until a compatible verified provider comes online.
+  // Retry periodically while this screen is open; the server enforces offer locking.
+  useFocusEffect(useCallback(()=>{
+    if(!request||request.status!=="searching")return;
+    const attempt=()=>{
+      if(Date.now()<nextAutoMatch.current)return;
+      nextAutoMatch.current=Date.now()+30000;
+      void dispatchTow(request.id).then(result=>{
+        if(result.state==="offered")void load();
+      }).catch(()=>undefined);
+    };
+    const timer=setInterval(attempt,15000);
+    return()=>clearInterval(timer);
+  },[request?.id,request?.status,load]));
   const command=async(action:"retry"|"approve"|"reject"|"confirm"|"cancel"|"rate")=>{
     if(!request||busy)return;setBusy(true);setError("");setInfo("");
     try{
       if(action==="retry"){
         const result=await dispatchTow(request.id);
         setInfo(result.state==="offered"?"Pickup request offered to an available verified towing agent.":
-          result.state==="no_available_agent"?"No verified towing agent is currently online. Try again when one becomes available.":
+          result.state==="no_available_agent"?"No approved, online towing agent currently supports this specific towing service. Check the service type below or try again later.":
           "Matching request checked. "+result.state.replace(/_/g," "));
       }else if(action==="approve")await approveTowQuote(request.id,true);
       else if(action==="reject")await approveTowQuote(request.id,false);
@@ -109,7 +124,7 @@ export default function MotoristTowTracking(){
     request?.status==="en_route"?request.destination_longitude:request?.pickup_longitude);
   const agentPoint=validPartsCoordinate(request?.agent_latitude,request?.agent_longitude);
   return <PartsPage title="Towing status" subtitle="Track your roadside assistance"
-    back="/motorist/home" loading={loading} refresh={()=>void load()}>
+    back="/motorist/home" loading={loading} refresh={load}>
     {profile?.role!=="motorist"?<Notice tone="error">Motorist account required.</Notice>:
     !request?<>
       <Notice>You have no towing requests to track.</Notice>
@@ -130,7 +145,7 @@ export default function MotoristTowTracking(){
         <Text style={styles.address}>{request.destination_text}</Text>
       </View>
       {request.status==="searching"?<>
-        <Notice>AutoAssist checks verified towing agents who are online. Availability can vary; no operator has accepted yet.</Notice>
+        <Notice>AutoAssist matches both online status and verified equipment. Your selected service is {request.service_type?towServiceLabels[request.service_type]:"the requested towing type"}. An online flatbed-only agent cannot accept a wheel-lift request. Matching retries automatically while you keep this screen open.</Notice>
         <Action label="Retry agent matching" busy={busy} onPress={()=>void command("retry")}/>
         <Action label="Cancel towing request" variant="outline" disabled={busy} onPress={confirmCancel}/>
       </>:null}
