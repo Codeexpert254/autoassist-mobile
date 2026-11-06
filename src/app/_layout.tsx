@@ -13,6 +13,7 @@ import "@/services/trip-background";
 
 import { DemoToast } from "@/components/demo-toast";
 import { AuthProvider } from "@/context/auth-context";
+import { AutoAssistFontProvider } from "@/components/autoassist-font";
 import { DemoAppProvider } from "@/context/demo-app-context";
 import { RepairFlowProvider } from "@/context/repair-flow-context";
 
@@ -96,6 +97,7 @@ export default function RootLayout() {
   }
 
   return (
+    <AutoAssistFontProvider>
     <AuthProvider>
       <DemoAppProvider>
         <RepairFlowProvider>
@@ -110,5 +112,6 @@ export default function RootLayout() {
         </RepairFlowProvider>
       </DemoAppProvider>
     </AuthProvider>
+    </AutoAssistFontProvider>
   );
 }
