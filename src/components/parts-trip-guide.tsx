@@ -32,12 +32,13 @@ async function openNavigation(target: PartsCoordinate|null,address:string){
 }
 
 export function PartsTripGuide({
-  destination,destinationLabel,ownPosition,mode="rider",
+  destination,destinationLabel,ownPosition,mode="rider",onNavigate,
 }:{
   destination:PartsCoordinate|null;
   destinationLabel:string;
   ownPosition:PartsCoordinate|null;
   mode?:"rider"|"motorist"|"towing"|"tow_motorist";
+  onNavigate?:()=>void;
 }){
   const camera=useRef<CameraRef>(null);
   const [ready,setReady]=useState(false);
@@ -171,14 +172,14 @@ export function PartsTripGuide({
     {mapError?<Text style={styles.error}>{mapError}</Text>:null}
     {(mode==="rider"||mode==="towing")?<View style={styles.navigationRow}>
       <Pressable style={[styles.navigate,{flex:1,marginTop:0}]} accessibilityRole="button"
-        onPress={()=>{setNavigationOpen(true);focus();}}>
+        onPress={()=>{onNavigate?.();setNavigationOpen(true);focus();}}>
         <SymbolView name={{ios:"map.fill",android:"map",web:"map"} as never}
           size={18} tintColor="#FFFFFF"/>
         <Text style={styles.navigateText}>Navigate in app</Text>
       </Pressable>
       <Pressable style={styles.googleMaps} accessibilityRole="button"
-        onPress={()=>void openNavigation(destination,destinationLabel).catch(e=>
-          setOpenError(e instanceof Error?e.message:"Could not open maps."))}>
+        onPress={()=>{onNavigate?.();void openNavigation(destination,destinationLabel).catch(e=>
+          setOpenError(e instanceof Error?e.message:"Could not open maps."));}}>
         <Text style={styles.googleMapsText}>Google Maps</Text>
       </Pressable>
     </View>:null}
