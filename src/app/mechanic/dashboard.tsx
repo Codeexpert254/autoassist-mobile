@@ -2,7 +2,7 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text } from "@/components/autoassist-font";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [connectionPayment, setConnectionPayment] = useState<any>(null);
   const [loading, setLoading] = useState(backendEnabled);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [refreshing,setRefreshing]=useState(false);
   const [error, setError] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const loadProviderState = async () => {
@@ -173,6 +174,11 @@ export default function Dashboard() {
     }
   };
 
+  const pullRefresh=async()=>{
+    if(refreshing)return;
+    setRefreshing(true);
+    try{await loadProviderState();}finally{setRefreshing(false);}
+  };
   const logout = async () => {
     try {
       if (user && mechanicProfile?.verified && mechanicProfile?.is_available) {
@@ -234,7 +240,8 @@ export default function Dashboard() {
     return (
       <View style={styles.screen}>
         <SafeAreaView style={styles.safeArea}>
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>void pullRefresh()} tintColor="#1857A6" colors={["#1857A6"]}/>}>
             <View style={styles.topRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
@@ -318,7 +325,8 @@ export default function Dashboard() {
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>void pullRefresh()} tintColor="#1857A6" colors={["#1857A6"]}/>}>
           <View style={styles.topRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.eyebrow}>MECHANIC DASHBOARD</Text>
@@ -466,9 +474,7 @@ export default function Dashboard() {
             <Text style={styles.cardText}>{mechanicProfile?.services?.join(" • ")}</Text>
           </View>
 
-          <Pressable style={styles.refreshButton} onPress={() => void loadProviderState()}>
-            <Text style={styles.refreshText}>Refresh dashboard</Text>
-          </Pressable>
+          <Text style={styles.pullHint}>Pull down from the top to check for new offers and job updates.</Text>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -546,6 +552,7 @@ const styles = StyleSheet.create({
   cardText: { color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 4 },
   refreshButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: "#1857A6", alignItems: "center", justifyContent: "center", marginTop: 16 },
   refreshText: { color: "#1857A6", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  pullHint:{color:"#667085",fontSize:11,textAlign:"center",marginTop:20,marginBottom:4},
   errorCard: { backgroundColor: "#FFF1F2", borderWidth: 1, borderColor: "#F3C5C9", borderRadius: 14, padding: 14, marginTop: 20 },
   errorTitle: { color: "#D9363E", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   errorText: { color: "#667085", fontSize: 11, lineHeight: 16, fontFamily: "Inter_400Regular", marginTop: 5 },
